@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Hermie mascot face (simplified for icon) -->
+    <!-- Body -->
+    <path
+        android:fillColor="#344C3D"
+        android:pathData="M30,30 h48 a18,18 0 0,1 18,18 v12 a18,18 0 0,1 -18,18 h-48 a18,18 0 0,1 -18,-18 v-12 a18,18 0 0,1 18,-18 z" />
+
+    <!-- Left eye -->
+    <path
+        android:fillColor="#FFFEFC"
+        android:pathData="M40,48 a4,5 0 1,1 8,0 a4,5 0 1,1 -8,0" />
+
+    <!-- Right eye -->
+    <path
+        android:fillColor="#FFFEFC"
+        android:pathData="M60,48 a4,5 0 1,1 8,0 a4,5 0 1,1 -8,0" />
+
+    <!-- Smile -->
+    <path
+        android:strokeColor="#FFFEFC"
+        android:strokeWidth="2.5"
+        android:fillColor="#00000000"
+        android:pathData="M42,58 Q54,68 66,58" />
+</vector>

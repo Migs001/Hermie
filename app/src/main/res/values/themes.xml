@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose handles theming, this is just for the splash/launch -->
+    <style name="Theme.Hermie" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

@@ -1,0 +1,156 @@
+{
+  "tools": [
+    {
+      "name": "alarm.set",
+      "description": "Set an alarm",
+      "parameters": {
+        "time": "str (HH:MM 24h)",
+        "label": "str (optional)",
+        "repeat": "str (optional: daily|weekdays|weekends|mon,wed,fri)"
+      }
+    },
+    {
+      "name": "alarm.cancel",
+      "description": "Cancel an alarm by label",
+      "parameters": {
+        "label": "str"
+      }
+    },
+    {
+      "name": "timer.set",
+      "description": "Set a countdown timer",
+      "parameters": {
+        "duration": "str (e.g. 5m, 1h30m, 90s)",
+        "label": "str (optional)"
+      }
+    },
+    {
+      "name": "reminder.set",
+      "description": "Set a reminder notification",
+      "parameters": {
+        "text": "str",
+        "datetime": "str (ISO 8601: YYYY-MM-DDTHH:MM:SS)"
+      }
+    },
+    {
+      "name": "reminder.list",
+      "description": "List all pending reminders",
+      "parameters": {}
+    },
+    {
+      "name": "reminder.cancel",
+      "description": "Cancel a reminder by text match",
+      "parameters": {
+        "text": "str"
+      }
+    },
+    {
+      "name": "calendar.add",
+      "description": "Add a calendar event",
+      "parameters": {
+        "title": "str",
+        "datetime": "str (ISO 8601)",
+        "duration": "str (optional, e.g. 1h)",
+        "location": "str (optional)",
+        "notes": "str (optional)"
+      }
+    },
+    {
+      "name": "calendar.query",
+      "description": "List events for a date or range",
+      "parameters": {
+        "date": "str (YYYY-MM-DD)",
+        "range": "str (optional: day|week|month)"
+      }
+    },
+    {
+      "name": "phone.call",
+      "description": "Initiate a phone call",
+      "parameters": {
+        "name": "str"
+      }
+    },
+    {
+      "name": "phone.text",
+      "description": "Send a text message",
+      "parameters": {
+        "name": "str",
+        "message": "str"
+      }
+    },
+    {
+      "name": "contact.lookup",
+      "description": "Look up a contact's details",
+      "parameters": {
+        "name": "str"
+      }
+    },
+    {
+      "name": "music.play",
+      "description": "Play music",
+      "parameters": {
+        "query": "str (song, artist, genre, or playlist)"
+      }
+    },
+    {
+      "name": "music.pause",
+      "description": "Pause current music",
+      "parameters": {}
+    },
+    {
+      "name": "music.skip",
+      "description": "Skip to next track",
+      "parameters": {}
+    },
+    {
+      "name": "music.volume",
+      "description": "Set or adjust volume",
+      "parameters": {
+        "level": "str (0-100 or up|down|mute)"
+      }
+    },
+    {
+      "name": "flashlight.toggle",
+      "description": "Toggle flashlight",
+      "parameters": {
+        "state": "str (on|off)"
+      }
+    },
+    {
+      "name": "brightness.set",
+      "description": "Set screen brightness",
+      "parameters": {
+        "level": "str (0-100 or auto)"
+      }
+    },
+    {
+      "name": "dnd.toggle",
+      "description": "Toggle Do Not Disturb mode",
+      "parameters": {
+        "state": "str (on|off)"
+      }
+    },
+    {
+      "name": "app.open",
+      "description": "Open an app by name",
+      "parameters": {
+        "name": "str"
+      }
+    },
+    {
+      "name": "navigate.to",
+      "description": "Get directions to a destination",
+      "parameters": {
+        "destination": "str",
+        "mode": "str (optional: driving|walking|transit)"
+      }
+    },
+    {
+      "name": "calculate",
+      "description": "Evaluate a math expression",
+      "parameters": {
+        "expression": "str"
+      }
+    }
+  ]
+}

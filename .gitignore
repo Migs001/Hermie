@@ -1,0 +1,24 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+/build
+/app/build
+/out
+/captures
+.externalNativeBuild
+.cxx
+*.apk
+*.ap_
+*.dex
+*.class
+*.log
+*.tmp
+
+# llama.cpp source (cloned by setup_llama.sh)
+app/src/main/cpp/llama.cpp/
+
+# Model files (too large for git)
+*.gguf
+*.onnx
+*.tflite
