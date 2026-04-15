@@ -14,8 +14,7 @@ import com.hermie.assistant.ui.components.OnboardingProgress
 import com.hermie.assistant.ui.theme.HermieSurface
 
 /**
- * Onboarding flow: Gender → Name → Personality (joke) → Model Download.
- * Clean, minimal, inspired by reference image 1.
+ * Onboarding flow: Name -> DoB -> Gender -> Personality (joke) -> Model Download.
  */
 @Composable
 fun OnboardingScreen(
@@ -24,8 +23,9 @@ fun OnboardingScreen(
     onComplete: () -> Unit
 ) {
     var currentStep by remember { mutableIntStateOf(0) }
-    var gender by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
+    var dateOfBirth by remember { mutableStateOf("") }
+    var gender by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -37,7 +37,7 @@ fun OnboardingScreen(
         // Progress dots at top
         OnboardingProgress(
             currentStep = currentStep,
-            totalSteps = 4,
+            totalSteps = 5,
             modifier = Modifier
                 .padding(horizontal = 24.dp, vertical = 16.dp)
                 .align(Alignment.CenterHorizontally)
@@ -59,30 +59,37 @@ fun OnboardingScreen(
             modifier = Modifier.fillMaxSize()
         ) { step ->
             when (step) {
-                0 -> GenderScreen(
-                    selectedGender = gender,
-                    onGenderSelected = { gender = it },
-                    onNext = { currentStep = 1 }
-                )
-                1 -> NameScreen(
+                0 -> NameScreen(
                     name = name,
                     onNameChanged = { name = it },
+                    onNext = { currentStep = 1 }
+                )
+                1 -> DateOfBirthScreen(
+                    dateOfBirth = dateOfBirth,
+                    onDateChanged = { dateOfBirth = it },
                     onBack = { currentStep = 0 },
+                    onNext = { currentStep = 2 }
+                )
+                2 -> GenderScreen(
+                    selectedGender = gender,
+                    onGenderSelected = { gender = it },
+                    onBack = { currentStep = 1 },
                     onNext = {
                         settings.userName = name
+                        settings.userDateOfBirth = dateOfBirth
                         settings.userGender = gender
-                        currentStep = 2
+                        currentStep = 3
                     }
                 )
-                2 -> PersonalityScreen(
+                3 -> PersonalityScreen(
                     jokeMessage = settings.personalityJokeMessage,
-                    onBack = { currentStep = 1 },
-                    onNext = { currentStep = 3 }
+                    onBack = { currentStep = 2 },
+                    onNext = { currentStep = 4 }
                 )
-                3 -> ModelDownloadScreen(
+                4 -> ModelDownloadScreen(
                     modelManager = modelManager,
                     settings = settings,
-                    onBack = { currentStep = 2 },
+                    onBack = { currentStep = 3 },
                     onComplete = {
                         settings.completeOnboarding()
                         onComplete()

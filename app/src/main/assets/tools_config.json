@@ -124,13 +124,6 @@
       }
     },
     {
-      "name": "dnd.toggle",
-      "description": "Toggle Do Not Disturb mode",
-      "parameters": {
-        "state": "str (on|off)"
-      }
-    },
-    {
       "name": "app.open",
       "description": "Open an app by name",
       "parameters": {
@@ -154,3 +147,44 @@
     }
   ]
 }
+
+# Android-specific tools:
+calendar.view
+calendar.edit
+phone.call
+phone.text
+navigate.to
+navigate.directions
+maps.search
+camera.photo
+music.play (stop, resume etc)
+music.skip
+music.previous
+music.volume
+wifi.settings
+bluetooth.settings
+volume.set
+email.compose
+web.open
+whatsapp.send
+notes.create
+notes.search
+notes.open
+notes.share
+
+APIs for external data:
+Location & Navigation
+•	OpenStreetMap / Overpass API — fully free, no key needed; query nearby POIs including restaurants.
+•	OpenRouteService — free routing/directions with ETA calculation.
+Weather
+•	Open-Meteo — completely free, no API key; returns current weather and forecasts by coordinates.
+News & Search
+•	NewsAPI — free tier for headlines by topic or keyword.
+•	DuckDuckGo Instant Answer API — free, no key; returns structured info for factual queries.
+Open Library API  Book metadata, covers, search by ISBN/title
+TheMealDB
+TheCocktailDB
+Research papers:
+http://export.arxiv.org/api/query?search_query=all:electron.
+Finance
+•	Yahoo Finance (unofficial) — widely used for stock quotes with no official key requirement.

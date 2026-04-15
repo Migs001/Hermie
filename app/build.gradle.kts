@@ -16,7 +16,7 @@ android {
         versionName = "1.0.0"
 
         ndk {
-            // Build for arm64 (most phones) — kotlinllamacpp 0.2.0 only ships arm64
+            // Build for arm64 (most phones) — llama.cpp native lib targets arm64
             abiFilters += listOf("arm64-v8a")
         }
     }
@@ -40,27 +40,27 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         compose = true
     }
 
-    // NOTE: Removed CMake native build — using pre-built kotlinllamacpp instead
-    // The hand-built llama.cpp was missing ARM NEON/i8mm optimizations (1.3 tok/s).
-    // kotlinllamacpp ships pre-built optimized .so files (~20-40 tok/s on same hardware).
+    // Native build is in the :lib module (llama.cpp from source with full optimizations)
 
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
-        // Avoid duplicate .so conflicts between sherpa-onnx and llamacpp-kotlin
+        // Avoid duplicate .so conflicts between sherpa-onnx and llama.cpp
         jniLibs {
             pickFirsts += setOf("**/libc++_shared.so")
+            // Extract native libs to disk so ggml_backend_load_all_from_path() can find them
+            useLegacyPackaging = true
         }
     }
+}
+
+kotlin {
+    jvmToolchain(17)
 }
 
 dependencies {
@@ -79,6 +79,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-process:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
 
     // ── Coroutines ──
@@ -87,8 +88,14 @@ dependencies {
     // ── Archive extraction (for espeak-ng-data tar.bz2) ──
     implementation("org.apache.commons:commons-compress:1.27.1")
 
-    // ── LLM inference (pre-built llama.cpp with ARM NEON/i8mm optimizations) ──
-    implementation("io.github.ljcamargo:llamacpp-kotlin:0.2.0")
+    // ── LLM inference (llama.cpp built from source — supports Qwen 3, latest optimizations) ──
+    implementation(project(":lib"))
+
+    // ── TFLite (MiniLM-L6-v2 embedding engine for memory retrieval) ──
+    implementation("org.tensorflow:tensorflow-lite:2.16.1")
+
+    // ── PdfBox-Android (PDF text extraction for Study module) ──
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
 
     // ── Sherpa-ONNX (offline Whisper STT + Piper TTS) ──
     // AAR downloaded from https://github.com/k2-fsa/sherpa-onnx/releases

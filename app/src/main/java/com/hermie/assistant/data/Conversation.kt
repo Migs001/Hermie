@@ -9,7 +9,13 @@ data class ChatMessage(
     val content: String,
     val timestamp: Long = System.currentTimeMillis(),
     /** Parsed emotion tag from assistant responses */
-    val emotion: String? = null
+    val emotion: String? = null,
+    /** SLM mind debug info (classification JSON, retrieved nodes summary) */
+    val mindDebug: String? = null,
+    /** Model's thinking/reasoning content (Qwen 3.5 <think> blocks) */
+    val thinkingContent: String? = null,
+    /** Attached image URI (content:// or file://) — for vision model input */
+    val imageUri: String? = null
 )
 
 /** A conversation (chat thread) */

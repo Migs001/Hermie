@@ -180,7 +180,11 @@ class PiperTtsEngine {
      * @param isGenerating lambda that returns true while the LLM is still producing tokens
      */
     suspend fun processQueue(isGenerating: () -> Boolean) {
-        if (tts == null) return
+        if (tts == null) {
+            Log.w(TAG, "processQueue: tts is null, skipping")
+            return
+        }
+        Log.d(TAG, "processQueue: starting, queue size=${sentenceQueue.size}")
         _state.value = TtsState.SPEAKING
 
         playbackMutex.withLock {
@@ -226,10 +230,11 @@ class PiperTtsEngine {
             AudioFormat.ENCODING_PCM_16BIT
         ).coerceAtLeast(shortSamples.size * 2)
 
+        Log.d(TAG, "playAudio: ${samples.size} samples at ${rate}Hz, duration=${samples.size * 1000L / rate}ms")
         val track = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build()
             )

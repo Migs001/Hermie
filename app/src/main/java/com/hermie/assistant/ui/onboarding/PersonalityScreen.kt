@@ -27,7 +27,6 @@ fun PersonalityScreen(
     onNext: () -> Unit
 ) {
     var showJoke by remember { mutableStateOf(false) }
-    var slidersMoved by remember { mutableStateOf(false) }
 
     // Fake slider values
     var friendliness by remember { mutableFloatStateOf(0.5f) }
@@ -38,7 +37,8 @@ fun PersonalityScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp)
+            .padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(Modifier.height(8.dp))
 
@@ -48,6 +48,7 @@ fun PersonalityScreen(
             tint = HermieForest,
             modifier = Modifier
                 .size(28.dp)
+                .align(Alignment.Start)
                 .clickable(onClick = onBack)
         )
 
@@ -60,10 +61,12 @@ fun PersonalityScreen(
         Text(
             text = "Shape Hermie's\npersonality",
             style = TextStyle(
+                fontFamily = HermieSerif,
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
                 color = HermieForest,
-                lineHeight = 38.sp
+                lineHeight = 38.sp,
+                textAlign = TextAlign.Center
             )
         )
 
@@ -71,7 +74,12 @@ fun PersonalityScreen(
 
         Text(
             text = "Adjust the sliders to your preference",
-            style = TextStyle(fontSize = 15.sp, color = HermieGrey)
+            style = TextStyle(
+                fontFamily = HermieSerif,
+                fontSize = 15.sp,
+                color = HermieGrey,
+                textAlign = TextAlign.Center
+            )
         )
 
         Spacer(Modifier.height(32.dp))
@@ -81,21 +89,13 @@ fun PersonalityScreen(
             exit = fadeOut(tween(300)) + shrinkVertically(tween(300))
         ) {
             Column {
-                PersonalitySlider("Friendliness", friendliness) {
-                    friendliness = it; slidersMoved = true
-                }
+                PersonalitySlider("Friendliness", friendliness) { friendliness = it }
                 Spacer(Modifier.height(20.dp))
-                PersonalitySlider("Humor", humor) {
-                    humor = it; slidersMoved = true
-                }
+                PersonalitySlider("Humor", humor) { humor = it }
                 Spacer(Modifier.height(20.dp))
-                PersonalitySlider("Seriousness", seriousness) {
-                    seriousness = it; slidersMoved = true
-                }
+                PersonalitySlider("Seriousness", seriousness) { seriousness = it }
                 Spacer(Modifier.height(20.dp))
-                PersonalitySlider("Creativity", creativity) {
-                    creativity = it; slidersMoved = true
-                }
+                PersonalitySlider("Creativity", creativity) { creativity = it }
             }
         }
 
@@ -120,6 +120,7 @@ fun PersonalityScreen(
                     Text(
                         text = jokeMessage,
                         style = TextStyle(
+                            fontFamily = HermieSerif,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Medium,
                             color = HermieForest,
@@ -134,7 +135,7 @@ fun PersonalityScreen(
         Spacer(Modifier.weight(1f))
 
         HermieButton(
-            text = if (showJoke) "Continue" else "Apply",
+            text = if (showJoke) "Proceed" else "Apply",
             onClick = {
                 if (showJoke) {
                     onNext()
@@ -142,7 +143,7 @@ fun PersonalityScreen(
                     showJoke = true
                 }
             },
-            enabled = slidersMoved || showJoke,
+            enabled = true, // Always enabled — sliders can be skipped
             modifier = Modifier.padding(bottom = 32.dp)
         )
     }
@@ -162,6 +163,7 @@ private fun PersonalitySlider(
             Text(
                 text = label,
                 style = TextStyle(
+                    fontFamily = HermieSerif,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
                     color = HermieForest
@@ -169,7 +171,11 @@ private fun PersonalitySlider(
             )
             Text(
                 text = "${(value * 100).toInt()}%",
-                style = TextStyle(fontSize = 14.sp, color = HermieGrey)
+                style = TextStyle(
+                    fontFamily = HermieSerif,
+                    fontSize = 14.sp,
+                    color = HermieGrey
+                )
             )
         }
         Spacer(Modifier.height(8.dp))

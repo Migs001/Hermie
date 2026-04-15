@@ -7,16 +7,28 @@
     <!-- Voice input -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Camera (image input for vision models) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <!-- Media access (gallery image picker) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
     <!-- Internet (model downloads from HuggingFace) -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Location (weather for wardrobe outfit recommendations) -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <!-- Foreground service (background tasks, screen time tracking) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Overlay (draw mascot bubble over other apps) -->
+    <!-- Overlay (draw mascot bubble over other apps — kept for UI settings helper) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <!-- Screen time tracking (usage stats) -->
@@ -24,12 +36,39 @@
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
 
-    <!-- Notification reading (declared on the service, but listed here for clarity) -->
-    <!-- Granted via Settings > Notification access, not a runtime permission -->
+    <!-- Calendar access (task tools) -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+
+    <!-- Contacts access (task tools) -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!-- Exact alarms for reminders (Android 12+) -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
+    <!-- Clock/alarm app integration -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+
+    <!-- DND policy access -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+
+    <!-- Accessibility service (home action at level-2 screen time escalation) -->
+    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- Allow querying all installed packages (needed for screen time app list) -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
 
     <application
         android:name=".HermieApplication"
         android:allowBackup="true"
+        android:extractNativeLibs="true"
         android:icon="@mipmap/ic_launcher"
         android:label="Hermie"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -49,19 +88,34 @@
             </intent-filter>
         </activity>
 
+        <!-- ── Bubble Activity (for notification bubbles) ──── -->
+        <activity
+            android:name=".modules.overlay.BubbleActivity"
+            android:allowEmbedded="true"
+            android:documentLaunchMode="always"
+            android:resizeableActivity="true"
+            android:exported="false" />
+
         <!-- ── Background Service ─────────────────────────── -->
         <service
             android:name=".service.HermieBackgroundService"
             android:foregroundServiceType="dataSync"
             android:exported="false" />
 
-        <!-- ── Overlay Service ────────────────────────────── -->
+        <!-- ── Accessibility Service (home action at level-2) ─ -->
         <service
-            android:name=".modules.overlay.OverlayService"
-            android:exported="false" />
+            android:name=".modules.accessibility.HermieAccessibilityService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/hermie_accessibility_config" />
+        </service>
 
         <!-- ── Notification Listener Service ──────────────── -->
-        <!-- User must manually enable in Settings > Notification access -->
         <service
             android:name=".modules.notifications.HermieNotificationListener"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
@@ -71,7 +125,43 @@
             </intent-filter>
         </service>
 
-        <!-- ── FileProvider (for content:// URIs to model files) ── -->
+        <!-- ── Screen Time Reply Receiver ──────────────── -->
+        <receiver
+            android:name=".service.ScreenTimeReplyReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.hermie.assistant.ACTION_SCREEN_TIME_REPLY" />
+            </intent-filter>
+        </receiver>
+
+        <!-- ── Bubble Dismiss Receiver ──────────────────── -->
+        <receiver
+            android:name=".modules.screentime.BubbleDismissReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.hermie.assistant.ACTION_BUBBLE_DISMISSED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- ── Reminder Receiver ──────────────────────────── -->
+        <receiver
+            android:name=".modules.tools.ReminderReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.hermie.assistant.ACTION_REMINDER" />
+            </intent-filter>
+        </receiver>
+
+        <!-- ── Task Alarm Receiver ──────────────────────── -->
+        <receiver
+            android:name=".modules.tasks.TaskAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.hermie.assistant.ACTION_FIRE_TASK" />
+            </intent-filter>
+        </receiver>
+
+        <!-- ── FileProvider ─────────────────────────────── -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

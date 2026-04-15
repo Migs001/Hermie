@@ -37,6 +37,10 @@ class SpeechManager(private val context: Context) {
 
     var onWakeWordDetected: () -> Unit = {}
     var onQueryRecognized: (String) -> Unit = {}
+    /** Called when user starts speaking — use to cancel silence timeouts */
+    var onSpeechDetected: () -> Unit = {}
+    /** Called when listening ends with no result (timeout/no match in query mode) */
+    var onListeningTimeout: () -> Unit = {}
 
     private var isListeningForWakeWord = false
     private var consecutiveErrors = 0
@@ -47,6 +51,11 @@ class SpeechManager(private val context: Context) {
 
     // Tracks whether we've tried both on-device and default recognizers for language errors
     private var triedBothRecognizers = false
+
+    // Track which recognizer type works for each mode separately.
+    // On many devices, on-device works for query mode but not wake word mode.
+    private var lockedQueryRecognizer: Boolean? = null    // null=not locked, true=onDevice, false=default
+    private var lockedWakeWordRecognizer: Boolean? = null  // null=not locked, true=onDevice, false=default
 
     // Retry generation: incremented on each start/stop to cancel stale postDelayed callbacks
     private var retryGeneration = 0
@@ -70,8 +79,12 @@ class SpeechManager(private val context: Context) {
         retryGeneration++  // cancel any pending retries from previous session
         triedBothRecognizers = false
         _sttError.value = null
+        // Restore locked recognizer for wake word mode (often different from query mode)
+        if (lockedWakeWordRecognizer != null) {
+            useOnDevice = lockedWakeWordRecognizer!!
+        }
         _state.value = ListeningState.LISTENING_FOR_WAKE_WORD
-        Log.d(TAG, "Starting wake word listening (gen=$retryGeneration)")
+        Log.d(TAG, "Starting wake word listening (gen=$retryGeneration, onDevice=$useOnDevice, locked=${lockedWakeWordRecognizer != null})")
         startRecognitionOnMainThread()
     }
 
@@ -88,8 +101,12 @@ class SpeechManager(private val context: Context) {
         triedBothRecognizers = false
         _sttError.value = null
         _lastTranscript.value = ""
+        // Restore locked recognizer for query mode
+        if (lockedQueryRecognizer != null) {
+            useOnDevice = lockedQueryRecognizer!!
+        }
         _state.value = ListeningState.LISTENING_FOR_QUERY
-        Log.d(TAG, "Starting query listening (direct mic, gen=$retryGeneration)")
+        Log.d(TAG, "Starting query listening (direct mic, gen=$retryGeneration, onDevice=$useOnDevice, locked=${lockedQueryRecognizer != null})")
         startRecognitionOnMainThread()
     }
 
@@ -178,13 +195,26 @@ class SpeechManager(private val context: Context) {
 
     private fun createListener() = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) {
-            Log.d(TAG, "onReadyForSpeech — microphone is active")
+            Log.d(TAG, "onReadyForSpeech — microphone is active (onDevice=$useOnDevice, wakeWord=$isListeningForWakeWord)")
             consecutiveErrors = 0
             _sttError.value = null
+            // Lock this recognizer type for the current mode
+            if (isListeningForWakeWord) {
+                if (lockedWakeWordRecognizer == null) {
+                    lockedWakeWordRecognizer = useOnDevice
+                    Log.d(TAG, "Locked WAKE WORD recognizer: ${if (useOnDevice) "on-device" else "default"}")
+                }
+            } else {
+                if (lockedQueryRecognizer == null) {
+                    lockedQueryRecognizer = useOnDevice
+                    Log.d(TAG, "Locked QUERY recognizer: ${if (useOnDevice) "on-device" else "default"}")
+                }
+            }
         }
 
         override fun onBeginningOfSpeech() {
             Log.d(TAG, "onBeginningOfSpeech — user started talking")
+            onSpeechDetected()
         }
 
         override fun onRmsChanged(rmsdB: Float) {}
@@ -198,20 +228,38 @@ class SpeechManager(private val context: Context) {
         override fun onResults(results: Bundle?) {
             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val text = matches?.firstOrNull()?.trim() ?: ""
-            Log.d(TAG, "onResults: \"$text\" (${matches?.size ?: 0} matches)")
+            Log.d(TAG, "onResults: \"$text\" (${matches?.size ?: 0} matches, all=$matches)")
 
             if (isListeningForWakeWord) {
-                if (containsWakeWord(text)) {
-                    Log.d(TAG, "Wake word detected in: \"$text\"")
+                // Check ALL alternatives — sometimes the wake word + query is in a
+                // secondary match while the primary only has the wake word
+                val allTexts = matches?.map { it.trim() } ?: listOf(text)
+
+                // First, find the best match that contains wake word + a query
+                var bestQuery = ""
+                var wakeWordFound = false
+                for (alt in allTexts) {
+                    if (containsWakeWord(alt)) {
+                        wakeWordFound = true
+                        val q = extractQueryAfterWakeWord(alt)
+                        if (q.length > bestQuery.length) {
+                            bestQuery = q
+                        }
+                    }
+                }
+
+                if (wakeWordFound) {
+                    Log.d(TAG, "Wake word detected! bestQuery=\"$bestQuery\"")
                     onWakeWordDetected()
-                    val query = extractQueryAfterWakeWord(text)
-                    if (query.isNotBlank()) {
+                    if (bestQuery.isNotBlank()) {
                         _state.value = ListeningState.PROCESSING
-                        onQueryRecognized(query)
+                        onQueryRecognized(bestQuery)
                     } else {
+                        // Wake word only — switch to active query listening
                         startQueryListening()
                     }
                 } else {
+                    // No wake word — restart listening
                     startRecognition()
                 }
             } else {
@@ -221,9 +269,10 @@ class SpeechManager(private val context: Context) {
                     _lastTranscript.value = text
                     onQueryRecognized(text)
                 } else {
-                    Log.d(TAG, "Empty result in query mode, going idle")
+                    Log.d(TAG, "Empty result in query mode — notifying timeout")
                     _state.value = ListeningState.IDLE
                     _lastTranscript.value = ""
+                    onListeningTimeout()
                 }
             }
         }
@@ -259,9 +308,14 @@ class SpeechManager(private val context: Context) {
             if (error == SpeechRecognizer.ERROR_NO_MATCH ||
                 error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
             ) {
-                if (_state.value != ListeningState.IDLE) {
-                    Log.d(TAG, "Timeout/no match — restarting")
+                if (isListeningForWakeWord && _state.value != ListeningState.IDLE) {
+                    Log.d(TAG, "Timeout/no match in wake word mode — restarting")
                     startRecognition()
+                } else if (_state.value != ListeningState.IDLE) {
+                    // Query mode: notify the callback so ViewModel can decide to re-engage
+                    Log.d(TAG, "Timeout/no match in query mode — notifying")
+                    _state.value = ListeningState.IDLE
+                    onListeningTimeout()
                 }
                 return
             }
@@ -359,18 +413,20 @@ class SpeechManager(private val context: Context) {
         }, delayMs)
     }
 
+    /**
+     * Check if recognized text contains the wake word "Hermie".
+     * Android Speech may interpret it in various ways, so we match multiple
+     * phonetic spellings and common misrecognitions.
+     */
     private fun containsWakeWord(text: String): Boolean {
         val lower = text.lowercase()
-        return lower.contains("hermie") ||
-                lower.contains("hermy") ||
-                lower.contains("her me") ||
-                lower.contains("hey hermie")
+        return WAKE_WORD_VARIANTS.any { lower.contains(it) }
     }
 
     private fun extractQueryAfterWakeWord(text: String): String {
         val lower = text.lowercase()
-        val patterns = listOf("hey hermie ", "hermie ", "hermy ", "her me ")
-        for (pattern in patterns) {
+        // Try longer patterns first (e.g., "hey hermie" before "hermie")
+        for (pattern in WAKE_WORD_EXTRACT_PATTERNS) {
             val index = lower.indexOf(pattern)
             if (index >= 0) {
                 return text.substring(index + pattern.length).trim()
@@ -379,15 +435,42 @@ class SpeechManager(private val context: Context) {
         return ""
     }
 
+    companion object {
+        private const val TAG = "SpeechManager"
+
+        /**
+         * All recognized variants of "Hermie" that Android SpeechRecognizer
+         * might return. Covers common phonetic misrecognitions.
+         */
+        private val WAKE_WORD_VARIANTS = listOf(
+            "hermie", "hermy", "hernie", "hermi",
+            "her me", "her mi", "her knee",
+            "hey hermie", "hey hermy", "hey hermi",
+            "a hermie", "a hermy",
+            "harmony",   // common misrecognition
+            "homie",     // close phonetic match
+            "hurry me",  // stretched pronunciation
+            "hear me",   // another common misrecognition
+        )
+
+        /**
+         * Extraction patterns to strip the wake word and get the query.
+         * Longer patterns first to match greedy.
+         */
+        private val WAKE_WORD_EXTRACT_PATTERNS = listOf(
+            "hey hermie ", "hey hermy ", "hey hermi ", "hey hernie ",
+            "a hermie ", "a hermy ",
+            "hermie ", "hermy ", "hermi ", "hernie ",
+            "her me ", "her mi ", "her knee ",
+            "harmony ", "homie ", "hurry me ", "hear me "
+        )
+    }
+
     fun release() {
         stopListening()
         mainHandler.post {
             recognizer?.destroy()
             recognizer = null
         }
-    }
-
-    companion object {
-        private const val TAG = "SpeechManager"
     }
 }

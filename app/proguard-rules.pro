@@ -5,8 +5,8 @@
     native <methods>;
 }
 
-# Keep kotlinllamacpp classes (JNI + event classes)
--keep class org.nehuatl.llamacpp.** { *; }
+# Keep llama.cpp JNI bridge classes
+-keep class com.hermie.llamacpp.** { *; }
 
 # Keep sherpa-onnx classes (JNI)
 -keep class com.k2fsa.sherpa.onnx.** { *; }

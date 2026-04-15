@@ -13,7 +13,7 @@ class MockLlmEngine : LlmEngine {
     override var isLoaded: Boolean = true
         private set
 
-    override suspend fun loadModel(modelPath: String) {
+    override suspend fun loadModel(modelPath: String, useTurboCache: Boolean, contextSize: Int) {
         delay(500) // Simulate load time
         isLoaded = true
     }

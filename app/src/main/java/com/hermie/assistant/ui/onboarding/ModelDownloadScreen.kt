@@ -1,14 +1,10 @@
 package com.hermie.assistant.ui.onboarding
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,9 +12,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hermie.assistant.llm.ModelManager
+import com.hermie.assistant.llm.ModelType
 import com.hermie.assistant.data.HermieSettings
 import com.hermie.assistant.ui.components.HermieButton
 import com.hermie.assistant.ui.components.HermieOptionCard
@@ -37,18 +35,18 @@ fun ModelDownloadScreen(
     val downloadState by modelManager.downloadState.collectAsState()
     var selectedTier by remember { mutableStateOf(settings.selectedModelTier) }
     var isDownloading by remember { mutableStateOf(false) }
-    var downloadComplete by remember { mutableStateOf(modelManager.isModelDownloaded) }
 
     val tiers = listOf(
-        ModelTier("small", "Small", "~400 MB", "Qwen 2.5 0.5B — Tiny & fast", "qwen2.5-0.5b"),
-        ModelTier("medium", "Medium", "~1 GB", "Qwen 2.5 1.5B — Balanced", "qwen2.5-1b"),
-        ModelTier("large", "Large", "~2 GB", "Qwen 2.5 3B — Most capable", "qwen2.5-3b")
+        ModelTier("small", "Small", "~1.3 GB", "Qwen 3.5 2B — Fast & capable", "qwen3.5-2b"),
+        ModelTier("medium", "Medium", "~2.7 GB", "Qwen 3.5 4B — Smart & balanced", "qwen3.5-4b"),
+        ModelTier("large", "Large", "~5.2 GB", "Qwen 3.5 8B — Most capable", "qwen3.5-8b")
     )
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp)
+            .padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(Modifier.height(8.dp))
 
@@ -58,6 +56,7 @@ fun ModelDownloadScreen(
             tint = HermieForest,
             modifier = Modifier
                 .size(28.dp)
+                .align(Alignment.Start)
                 .clickable(onClick = onBack)
         )
 
@@ -70,10 +69,12 @@ fun ModelDownloadScreen(
         Text(
             text = "Choose Hermie's\nbrain size",
             style = TextStyle(
+                fontFamily = HermieSerif,
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
                 color = HermieForest,
-                lineHeight = 38.sp
+                lineHeight = 38.sp,
+                textAlign = TextAlign.Center
             )
         )
 
@@ -81,7 +82,13 @@ fun ModelDownloadScreen(
 
         Text(
             text = "Bigger brains are smarter but take more space.\nYou can change this later in Settings.",
-            style = TextStyle(fontSize = 15.sp, color = HermieGrey, lineHeight = 22.sp)
+            style = TextStyle(
+                fontFamily = HermieSerif,
+                fontSize = 15.sp,
+                color = HermieGrey,
+                lineHeight = 22.sp,
+                textAlign = TextAlign.Center
+            )
         )
 
         Spacer(Modifier.height(32.dp))
@@ -93,7 +100,7 @@ fun ModelDownloadScreen(
 
             HermieOptionCard(
                 text = "${tier.label}  •  ${tier.size}",
-                subtitle = tier.description + if (isDownloaded) "  ✓ Downloaded" else "",
+                subtitle = tier.description + if (isDownloaded) "  \u2713 Downloaded" else "",
                 selected = selectedTier == tier.id,
                 onClick = {
                     if (!isDownloading) {
@@ -104,7 +111,7 @@ fun ModelDownloadScreen(
             Spacer(Modifier.height(12.dp))
         }
 
-        // Download progress
+        // Download progress (shows while downloading in background)
         if (isDownloading) {
             Spacer(Modifier.height(16.dp))
             when (val state = downloadState) {
@@ -115,12 +122,20 @@ fun ModelDownloadScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                "Downloading...",
-                                style = TextStyle(fontSize = 14.sp, color = HermieForest)
+                                "Downloading in background...",
+                                style = TextStyle(
+                                    fontFamily = HermieSerif,
+                                    fontSize = 14.sp,
+                                    color = HermieForest
+                                )
                             )
                             Text(
                                 "${(state.progress * 100).toInt()}%",
-                                style = TextStyle(fontSize = 14.sp, color = HermieTerra)
+                                style = TextStyle(
+                                    fontFamily = HermieSerif,
+                                    fontSize = 14.sp,
+                                    color = HermieTerra
+                                )
                             )
                         }
                         Spacer(Modifier.height(8.dp))
@@ -135,14 +150,14 @@ fun ModelDownloadScreen(
                         )
                     }
                 }
-                is ModelManager.DownloadState.Complete -> {
-                    downloadComplete = true
-                    isDownloading = false
-                }
                 is ModelManager.DownloadState.Failed -> {
                     Text(
                         "Download failed: ${state.error}",
-                        style = TextStyle(fontSize = 14.sp, color = HermieError)
+                        style = TextStyle(
+                            fontFamily = HermieSerif,
+                            fontSize = 14.sp,
+                            color = HermieError
+                        )
                     )
                     isDownloading = false
                 }
@@ -152,39 +167,71 @@ fun ModelDownloadScreen(
 
         Spacer(Modifier.weight(1f))
 
-        if (downloadComplete) {
-            HermieButton(
-                text = "Let's go!",
-                onClick = onComplete,
-                modifier = Modifier.padding(bottom = 32.dp)
+        // Once downloading has started, let user proceed to home immediately
+        if (isDownloading) {
+            Text(
+                text = "Download will continue in the background",
+                style = TextStyle(
+                    fontFamily = HermieSerif,
+                    fontSize = 13.sp,
+                    color = HermieGrey,
+                    textAlign = TextAlign.Center
+                ),
+                modifier = Modifier.padding(bottom = 8.dp)
             )
-        } else {
-            HermieButton(
-                text = if (isDownloading) "Downloading..." else "Download & Continue",
-                onClick = {
-                    if (!isDownloading) {
-                        settings.selectedModelTier = selectedTier
-                        val model = ModelManager.BASE_BRAIN_MODELS
-                            .firstOrNull { it.id == tiers.first { t -> t.id == selectedTier }.modelId }
-                        if (model != null) {
-                            if (modelManager.isDownloaded(model)) {
-                                modelManager.setActiveModel(model)
-                                downloadComplete = true
-                            } else {
-                                isDownloading = true
-                                scope.launch {
-                                    val success = modelManager.downloadModel(model)
-                                    if (success) downloadComplete = true
-                                    isDownloading = false
-                                }
+        }
+
+        HermieButton(
+            text = when {
+                isDownloading -> "Let's go!"
+                else -> "Download & Proceed"
+            },
+            onClick = {
+                if (isDownloading) {
+                    // User wants to proceed — download continues in background
+                    // The ViewModel will auto-load the model when download completes
+                    onComplete()
+                } else {
+                    settings.selectedModelTier = selectedTier
+                    val model = ModelManager.BASE_BRAIN_MODELS
+                        .firstOrNull { it.id == tiers.first { t -> t.id == selectedTier }.modelId }
+                    if (model != null) {
+                        if (modelManager.isDownloaded(model)) {
+                            modelManager.setActiveModel(model)
+                            // Also kick off mind + embedding downloads in background
+                            downloadSupportModels(scope, modelManager)
+                            onComplete()
+                        } else {
+                            isDownloading = true
+                            scope.launch {
+                                modelManager.downloadModel(model)
+                                // Brain done — now download mind + embedding in background
+                                downloadSupportModels(scope, modelManager)
                             }
                         }
                     }
-                },
-                enabled = !isDownloading,
-                modifier = Modifier.padding(bottom = 32.dp)
-            )
-        }
+                }
+            },
+            enabled = true,
+            modifier = Modifier.padding(bottom = 32.dp)
+        )
+    }
+}
+
+/**
+ * Download SLM (memory classifier) and embedding model in background.
+ * These are small and essential for the memory module to work.
+ */
+private fun downloadSupportModels(scope: kotlinx.coroutines.CoroutineScope, modelManager: ModelManager) {
+    // Download SLM (mind model) if not already downloaded
+    val slmModel = ModelManager.SLM_MODELS.firstOrNull()
+    if (slmModel != null && !modelManager.isDownloaded(slmModel)) {
+        scope.launch { modelManager.downloadModel(slmModel) }
+    }
+    // Download embedding model if not already downloaded
+    val embModel = ModelManager.MIND_MODELS.firstOrNull()
+    if (embModel != null && !modelManager.isDownloaded(embModel)) {
+        scope.launch { modelManager.downloadModel(embModel) }
     }
 }
 

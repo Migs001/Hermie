@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Hermie"
 include(":app")
+include(":lib")

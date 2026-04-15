@@ -21,7 +21,9 @@ enum class ModelType(val subDir: String, val label: String) {
     BRAIN("brain", "Brain"),
     EARS("ears", "Ears"),
     VOICE("voice", "Voice"),
-    MIND("mind", "Mind")
+    MIND("mind", "Mind"),
+    SLM("slm", "Small LM"),
+    VISION("vision", "Vision")
 }
 
 data class ModelInfo(
@@ -35,7 +37,9 @@ data class ModelInfo(
     /** Whether this is a finetuned model (uses simplified system prompt, requires HF token) */
     val finetuned: Boolean = false,
     /** Extra files that must be downloaded alongside the main file (e.g. decoder, tokens) */
-    val extraFiles: List<ExtraFile> = emptyList()
+    val extraFiles: List<ExtraFile> = emptyList(),
+    val useTurboCache: Boolean = false,
+    val contextSize: Int = 8192
 )
 
 data class ExtraFile(
@@ -50,101 +54,56 @@ class ModelManager(private val context: Context, private val settings: HermieSet
 
         /**
          * Base (non-finetuned) brain models.
-         * Qwen 2.5 ONLY — kotlinllamacpp bundles llama.cpp from Oct 2024 which
-         * predates Qwen 3 architecture support (added April 2025).
-         * Qwen 3 models will crash on load — DO NOT add them here until
-         * the library is updated or we switch to a newer llama.cpp binding.
+         * Now using llama.cpp built from source (latest) — supports both
+         * Qwen 2.5 and Qwen 3 architectures with full ARM optimizations.
          */
         val BASE_BRAIN_MODELS = listOf(
+            // ── Qwen 3.5 only (hybrid arch, unified vision-language) ──
             ModelInfo(
-                id = "qwen2.5-0.5b",
-                displayName = "Qwen 2.5 0.5B",
-                fileName = "qwen2.5-0.5b-instruct-q4_k_m.gguf",
-                url = ModelUrls.BRAIN_QWEN25_05B,
-                sizeMb = 400,
-                paramCount = "0.5B",
-                type = ModelType.BRAIN
-            ),
-            ModelInfo(
-                id = "qwen2.5-1b",
-                displayName = "Qwen 2.5 1.5B",
-                fileName = "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
-                url = ModelUrls.BRAIN_QWEN25_1B,
-                sizeMb = 1050,
-                paramCount = "1.5B",
-                type = ModelType.BRAIN
-            ),
-            ModelInfo(
-                id = "qwen2.5-3b",
-                displayName = "Qwen 2.5 3B",
-                fileName = "qwen2.5-3b-instruct-q4_k_m.gguf",
-                url = ModelUrls.BRAIN_QWEN_3B,
-                sizeMb = 2000,
-                paramCount = "3B",
-                type = ModelType.BRAIN
-            )
-        )
-
-        /** Legacy base models — kept so already-downloaded files are still recognized.
-         *  Qwen 3 models are here because kotlinllamacpp's bundled llama.cpp is too
-         *  old to support the qwen3 architecture (crashes on load). */
-        val LEGACY_BRAIN_MODELS = listOf(
-            ModelInfo(
-                id = "qwen3-1.7b",
-                displayName = "Qwen 3 1.7B (Unsupported)",
-                fileName = "Qwen3-1.7B-Q4_K_M.gguf",
-                url = "",
-                sizeMb = 1170,
-                paramCount = "1.7B",
-                type = ModelType.BRAIN
-            ),
-            ModelInfo(
-                id = "qwen3-4b",
-                displayName = "Qwen 3 4B (Unsupported)",
-                fileName = "Qwen3-4B-Q4_K_M.gguf",
-                url = "",
-                sizeMb = 2600,
-                paramCount = "4B",
-                type = ModelType.BRAIN
-            ),
-            ModelInfo(
-                id = "qwen3-8b",
-                displayName = "Qwen 3 8B (Unsupported)",
-                fileName = "Qwen3-8B-Q4_K_M.gguf",
-                url = "",
-                sizeMb = 4900,
-                paramCount = "8B",
-                type = ModelType.BRAIN
+                id = "qwen3.5-0.8b",
+                displayName = "Qwen 3.5 0.8B",
+                fileName = "Qwen3.5-0.8B-Q4_K_M.gguf",
+                url = ModelUrls.BRAIN_QWEN35_08B,
+                sizeMb = 533,
+                paramCount = "0.8B",
+                type = ModelType.BRAIN,
+                useTurboCache = false,
+                contextSize = 4096
             ),
             ModelInfo(
                 id = "qwen3.5-2b",
-                displayName = "Qwen 3.5 2B (Legacy)",
+                displayName = "Qwen 3.5 2B",
                 fileName = "Qwen3.5-2B-Q4_K_M.gguf",
-                url = "",
+                url = ModelUrls.BRAIN_QWEN35_2B,
                 sizeMb = 1280,
                 paramCount = "2B",
-                type = ModelType.BRAIN
+                type = ModelType.BRAIN,
+                useTurboCache = true,
+                contextSize = 12288
             ),
             ModelInfo(
-                id = "qwen2.5-1.5b",
-                displayName = "Qwen 2.5 1.5B (Legacy)",
-                fileName = "qwen2.5-1.5b-instruct-q4_k_m.gguf",
-                url = ModelUrls.BRAIN_QWEN_15B,
-                sizeMb = 1120,
-                paramCount = "1.5B",
-                type = ModelType.BRAIN
-            ),
-            ModelInfo(
-                id = "nemotron-4b",
-                displayName = "Nemotron 3.1 4B (Legacy)",
-                fileName = "nvidia_Llama-3.1-Nemotron-Nano-4B-v1.1-Q4_K_M.gguf",
-                url = ModelUrls.BRAIN_NEMOTRON_4B,
-                sizeMb = 2780,
+                id = "qwen3.5-4b",
+                displayName = "Qwen 3.5 4B",
+                fileName = "Qwen3.5-4B-Q4_K_M.gguf",
+                url = ModelUrls.BRAIN_QWEN35_4B,
+                sizeMb = 2740,
                 paramCount = "4B",
-                type = ModelType.BRAIN
+                type = ModelType.BRAIN,
+                useTurboCache = true,
+                contextSize = 16384
+            ),
+            ModelInfo(
+                id = "qwen3.5-8b",
+                displayName = "Qwen 3.5 9B",
+                fileName = "Qwen3.5-8B-Q4_K_M.gguf",
+                url = ModelUrls.BRAIN_QWEN35_8B,
+                sizeMb = 5200,
+                paramCount = "9B",
+                type = ModelType.BRAIN,
+                useTurboCache = true,
+                contextSize = 16384
             )
         )
-
         /** Finetuned brain models (require HF token for download) */
         val FINETUNED_BRAIN_MODELS = listOf(
             ModelInfo(
@@ -155,7 +114,10 @@ class ModelManager(private val context: Context, private val settings: HermieSet
                 sizeMb = 1120,
                 paramCount = "1.5B",
                 type = ModelType.BRAIN,
-                finetuned = true
+                finetuned = true,
+                useTurboCache = false,
+                contextSize = 8192
+
             ),
             ModelInfo(
                 id = "qwen2.5-3b-ft",
@@ -165,12 +127,14 @@ class ModelManager(private val context: Context, private val settings: HermieSet
                 sizeMb = 2000,
                 paramCount = "3B",
                 type = ModelType.BRAIN,
-                finetuned = true
+                finetuned = true,
+                useTurboCache = true,
+                contextSize = 12288
             )
         )
 
-        /** All brain models (current + finetuned + legacy for migration) */
-        val BRAIN_MODELS = BASE_BRAIN_MODELS + FINETUNED_BRAIN_MODELS + LEGACY_BRAIN_MODELS
+        /** All brain models (current + finetuned) */
+        val BRAIN_MODELS = BASE_BRAIN_MODELS + FINETUNED_BRAIN_MODELS
 
         val EARS_MODELS = listOf(
             ModelInfo(
@@ -220,8 +184,53 @@ class ModelManager(private val context: Context, private val settings: HermieSet
             )
         )
 
+        val SLM_MODELS = listOf(
+            ModelInfo(
+                id = "qwen3-06b-drip",
+                displayName = "Qwen3 0.6B (Drip Atomizer)",
+                fileName = "Qwen3-0.6B-Q4_K_M.gguf",
+                url = ModelUrls.SLM_QWEN3_06B,
+                sizeMb = 400,
+                paramCount = "0.6B",
+                type = ModelType.SLM,
+                useTurboCache = false,
+                contextSize = 4096  // Conversation transcript + system prompt + message + response
+            )
+        )
+
+        val VISION_MODELS = listOf(
+            ModelInfo(
+                id = "qwen3-vl-2b",
+                displayName = "Qwen3 VL 2B",
+                fileName = "Qwen3-VL-2B-Instruct-Q4_K_M.gguf",
+                url = ModelUrls.VISION_QWEN3VL_2B,
+                sizeMb = 1100,
+                paramCount = "2B",
+                type = ModelType.VISION,
+                useTurboCache = false,
+                contextSize = 8192,
+                extraFiles = listOf(
+                    ExtraFile("mmproj.gguf", ModelUrls.VISION_QWEN3VL_2B_MMPROJ)
+                )
+            ),
+            ModelInfo(
+                id = "qwen3-vl-4b",
+                displayName = "Qwen3 VL 4B",
+                fileName = "Qwen3-VL-4B-Instruct-Q4_K_M.gguf",
+                url = ModelUrls.VISION_QWEN3VL_4B,
+                sizeMb = 2500,
+                paramCount = "4B",
+                type = ModelType.VISION,
+                useTurboCache = true,
+                contextSize = 8192,
+                extraFiles = listOf(
+                    ExtraFile("mmproj.gguf", ModelUrls.VISION_QWEN3VL_4B_MMPROJ)
+                )
+            )
+        )
+
         /** All models across all types */
-        val ALL_MODELS = BRAIN_MODELS + EARS_MODELS + VOICE_MODELS + MIND_MODELS
+        val ALL_MODELS = BRAIN_MODELS + EARS_MODELS + VOICE_MODELS + MIND_MODELS + SLM_MODELS + VISION_MODELS
 
         /** Backwards-compatible alias */
         val AVAILABLE_MODELS = BRAIN_MODELS
@@ -231,6 +240,8 @@ class ModelManager(private val context: Context, private val settings: HermieSet
             ModelType.EARS -> EARS_MODELS
             ModelType.VOICE -> VOICE_MODELS
             ModelType.MIND -> MIND_MODELS
+            ModelType.SLM -> SLM_MODELS
+            ModelType.VISION -> VISION_MODELS
         }
     }
 
@@ -486,11 +497,21 @@ class ModelManager(private val context: Context, private val settings: HermieSet
         // Also delete extra files
         val dir = typeDir(model.type)
         model.extraFiles.forEach { extra ->
-            File(dir, extra.fileName).delete()
+            val extraFile = File(dir, extra.fileName)
+            extraFile.delete()
+            // If it was a .tar.bz2 archive, delete the extracted directory too
+            if (extra.fileName.endsWith(".tar.bz2")) {
+                val extractedName = extra.fileName.removeSuffix(".tar.bz2")
+                val extractedDir = File(dir, extractedName)
+                if (extractedDir.isDirectory) {
+                    extractedDir.deleteRecursively()
+                }
+            }
         }
         if (_activeModels[model.type]!!.value?.id == model.id) {
             _activeModels[model.type]!!.value = findDownloadedModel(model.type)
         }
+        Log.d(TAG, "Deleted model: ${model.id} (${model.type.label})")
     }
 
     // ── Migration ──

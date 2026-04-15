@@ -49,6 +49,23 @@ interface ToolModule : HermieModule {
 
     /** Execute a tool call and return the result */
     suspend fun executeTool(name: String, params: Map<String, String>): ToolResult
+
+    /**
+     * Whether this module's tools should be included in the chat-mode tool list.
+     * Default: false (tools are available in Tasks mode only).
+     * Override to true for tools that are safe and useful during hands-free chat.
+     */
+    val availableInChatMode: Boolean get() = false
+
+    /**
+     * If non-null, only the named tools from this module are exposed in chat mode.
+     * If null and [availableInChatMode] is true, all tools from this module are exposed.
+     * Ignored when [availableInChatMode] is false.
+     *
+     * Example: CalendarModule sets this to setOf("calendar.check") so only the
+     * read-only tool is available in chat, not the write calendar.add tool.
+     */
+    val chatModeToolNames: Set<String>? get() = null
 }
 
 /**

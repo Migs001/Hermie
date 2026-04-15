@@ -8,36 +8,26 @@ package com.hermie.assistant.llm
  *   https://huggingface.co/{user}/{repo}/resolve/main/{file}
  *   + Authorization: Bearer hf_YOUR_TOKEN header
  *
- * NOTE: Qwen 3 (pure transformer) — NOT Qwen 3.5 (hybrid SSM/Mamba).
- * Qwen 3.5's Mamba layers are too slow for phone CPU inference.
+ * NOTE: Qwen 3 = pure transformer. Qwen 3.5 = hybrid (Gated Delta Networks + MoE).
+ * Qwen 3.5 may be slower on phone CPU but offers better reasoning/tool-calling.
  */
 object ModelUrls {
 
-    // ── Brain (LLM) — Base models (Qwen 3, pure transformer) ─────
-    const val BRAIN_QWEN3_2B =
-        "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf"
-    const val BRAIN_QWEN3_4B =
-        "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf"
-    const val BRAIN_QWEN3_8B =
-        "https://huggingface.co/unsloth/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf"
+    // ── Brain (LLM) — Qwen 3.5 (hybrid arch, unified vision-language) ──
+    const val BRAIN_QWEN35_08B =
+        "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_K_M.gguf"
+    const val BRAIN_QWEN35_2B =
+        "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-Q4_K_M.gguf"
+    const val BRAIN_QWEN35_4B =
+        "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf"
+    const val BRAIN_QWEN35_8B =
+        "https://huggingface.co/unsloth/Qwen3.5-8B-GGUF/resolve/main/Qwen3.5-8B-Q4_K_M.gguf"
 
-    // ── Brain (LLM) — Qwen 2.5 base models ──────────────────────
-    const val BRAIN_QWEN25_05B =
-        "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf"
-    const val BRAIN_QWEN25_1B =
-        "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"
-    const val BRAIN_QWEN_15B =
-        "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf"
-    const val BRAIN_QWEN_3B =
-        "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf"
-    const val BRAIN_NEMOTRON_4B =
-        "https://huggingface.co/bartowski/nvidia_Llama-3.1-Nemotron-Nano-4B-v1.1-GGUF/resolve/main/nvidia_Llama-3.1-Nemotron-Nano-4B-v1.1-Q4_K_M.gguf"
-
-    // ── Brain (LLM) — Finetuned models ────────────────────────────
+    // ── Brain (Finetuned — private HF repos, require token) ──
     const val BRAIN_FINETUNED_QWEN_15B =
-        "https://huggingface.co/MigsN9/bmo-qwen2.5-1.5b/resolve/main/bmo-qwen2.5-1.5b-q4_k_m.gguf"
+        "https://huggingface.co/MigsN9/Hermie-Qwen2.5-1.5B/resolve/main/qwen2.5-1.5b-finetuned.gguf"
     const val BRAIN_FINETUNED_QWEN_3B =
-        "https://huggingface.co/MigsN9/bmo-qwen2.5-3b/resolve/main/bmo-qwen2.5-3b-q4_k_m.gguf"
+        "https://huggingface.co/MigsN9/Hermie-Qwen2.5-3B/resolve/main/bmo-qwen2.5-3b-q4_k_m.gguf"
 
     // ── Ears (STT) ──────────────────────────────────────────────
     const val EARS_WHISPER_TINY_ENCODER =
@@ -56,6 +46,22 @@ object ModelUrls {
         "https://huggingface.co/csukuangfj/vits-piper-en_US-lessac-medium/resolve/main/tokens.txt"
     const val VOICE_PIPER_ESPEAK_DATA =
         "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/espeak-ng-data.tar.bz2"
+
+    // ── SLM (Small Language Model — drip atomizer for memory extraction) ──
+    const val SLM_SMOLLM2_360M =
+        "https://huggingface.co/MigsN9/SmolLM2-360M-Instruct-Mem-Cat/resolve/main/smollm2-360m-mem-cat-q8_0.gguf"
+    const val SLM_QWEN3_06B =
+        "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q4_K_M.gguf"
+
+    // ── Vision (VLM — dedicated image-to-text) ────────────────
+    const val VISION_QWEN3VL_2B =
+        "https://huggingface.co/unsloth/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3-VL-2B-Instruct-Q4_K_M.gguf"
+    const val VISION_QWEN3VL_2B_MMPROJ =
+        "https://huggingface.co/unsloth/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-F16.gguf"
+    const val VISION_QWEN3VL_4B =
+        "https://huggingface.co/unsloth/Qwen3-VL-4B-Instruct-GGUF/resolve/main/Qwen3-VL-4B-Instruct-Q4_K_M.gguf"
+    const val VISION_QWEN3VL_4B_MMPROJ =
+        "https://huggingface.co/unsloth/Qwen3-VL-4B-Instruct-GGUF/resolve/main/mmproj-F16.gguf"
 
     // ── Mind (Embeddings) ─────────────────────────────────────
     const val MIND_MINILM_TFLITE =

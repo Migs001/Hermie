@@ -11,6 +11,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,6 +25,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hermie.assistant.ui.theme.*
+import com.hermie.assistant.ui.theme.HermieSerif
 
 /** Primary full-width button */
 @Composable
@@ -48,6 +51,7 @@ fun HermieButton(
         Text(
             text = text,
             style = TextStyle(
+                fontFamily = HermieSerif,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = HermieCream
@@ -94,7 +98,8 @@ fun HermieTextField(
     onValueChange: (String) -> Unit,
     label: String,
     modifier: Modifier = Modifier,
-    placeholder: String = ""
+    placeholder: String = "",
+    keyboardType: KeyboardType = KeyboardType.Text
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
@@ -117,6 +122,7 @@ fun HermieTextField(
             ),
             cursorBrush = SolidColor(HermieForest),
             singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
             modifier = Modifier
                 .fillMaxWidth()
                 .background(HermieOffWhite, RoundedCornerShape(14.dp))
@@ -192,6 +198,7 @@ fun HermieSectionLabel(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text.uppercase(),
         style = TextStyle(
+            fontFamily = HermieSerif,
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
             color = HermieGrey,

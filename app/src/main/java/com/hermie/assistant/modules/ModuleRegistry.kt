@@ -32,6 +32,14 @@ class ModuleRegistry(private val context: Context) {
             module.initialize(context)
             _modules.value = _modules.value + (module.id to module)
             Log.d(TAG, "Registered module: ${module.id} (${module.displayName})")
+
+            // Start the module after registration so it can begin background work
+            try {
+                module.start()
+                Log.d(TAG, "Started module: ${module.id} (active=${module.isActive})")
+            } catch (e: Exception) {
+                Log.w(TAG, "Module ${module.id} start() failed (non-fatal)", e)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register module ${module.id}", e)
         }
@@ -49,9 +57,40 @@ class ModuleRegistry(private val context: Context) {
     fun <T : HermieModule> getModuleAs(id: String, type: Class<T>): T? =
         _modules.value[id]?.let { type.cast(it) }
 
-    /** Get all tool definitions across all tool modules */
+    /**
+     * Brain execution context. Chat uses a curated subset of tools;
+     * Tasks mode gets the full inventory so it can execute arbitrary goals.
+     */
+    enum class BrainMode { CHAT, TASKS }
+
+    /** Get all tool definitions across all tool modules (full inventory) */
     fun getAllToolDefinitions(): List<ToolDefinition> =
         toolModules.flatMap { it.toolDefinitions }
+
+    /**
+     * Get tool definitions filtered for the given [mode].
+     *
+     * CHAT: only modules with [ToolModule.availableInChatMode] = true, further
+     *   filtered to [ToolModule.chatModeToolNames] when that set is non-null.
+     * TASKS: full inventory (same as [getAllToolDefinitions]).
+     *
+     * Registration is never gated — all modules register regardless of mode.
+     * This is purely a filtering concern at prompt-assembly time.
+     */
+    fun getToolDefinitionsForMode(mode: BrainMode): List<ToolDefinition> =
+        when (mode) {
+            BrainMode.TASKS -> getAllToolDefinitions()
+            BrainMode.CHAT -> toolModules
+                .filter { it.availableInChatMode }
+                .flatMap { module ->
+                    val allowed = module.chatModeToolNames
+                    if (allowed == null) {
+                        module.toolDefinitions
+                    } else {
+                        module.toolDefinitions.filter { it.name in allowed }
+                    }
+                }
+        }
 
     /** Execute a tool call, routing to the correct module */
     suspend fun executeTool(toolName: String, params: Map<String, String>): ToolResult {

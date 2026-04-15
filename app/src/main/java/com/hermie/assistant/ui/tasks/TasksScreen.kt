@@ -1,6 +1,7 @@
 package com.hermie.assistant.ui.tasks
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,30 +18,27 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.hermie.assistant.modules.tasks.SubTask
-import com.hermie.assistant.modules.tasks.Task
-import com.hermie.assistant.modules.tasks.TaskStatus
+import com.hermie.assistant.modules.tasks.*
 import com.hermie.assistant.ui.theme.*
-import kotlinx.coroutines.launch
 
 /**
- * Tasks screen — inspired by reference image 2 (workflow/flowchart style).
- * Shows tasks as a connected pipeline of subtasks.
+ * Tasks screen — workflow/pipeline view with expandable subtask details.
  */
 @Composable
 fun TasksScreen(
     tasks: List<Task>,
     currentTask: Task?,
+    executionStatus: String?,
     onBack: () -> Unit,
-    onCreateTask: (String, String) -> Unit,
+    onCreateTask: (String, String, Boolean) -> Unit,
     onSelectTask: (String) -> Unit,
+    onDeselectTask: () -> Unit,
     onExecuteAll: () -> Unit,
     onExecuteNext: () -> Unit,
     onDeleteTask: (String) -> Unit
@@ -61,12 +59,15 @@ fun TasksScreen(
                 .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onBack) {
+            IconButton(onClick = {
+                if (currentTask != null) onDeselectTask() else onBack()
+            }) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = HermieForest)
             }
             Text(
-                text = "Tasks",
+                text = if (currentTask != null) "Task Detail" else "Tasks",
                 style = TextStyle(
+                    fontFamily = HermieSerif,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = HermieForest
@@ -79,15 +80,14 @@ fun TasksScreen(
         }
 
         if (currentTask != null) {
-            // Show current task detail with workflow view
             TaskWorkflowView(
                 task = currentTask,
+                executionStatus = executionStatus,
                 onExecuteAll = onExecuteAll,
                 onExecuteNext = onExecuteNext,
                 modifier = Modifier.weight(1f)
             )
         } else if (tasks.isEmpty()) {
-            // Empty state
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -98,6 +98,7 @@ fun TasksScreen(
                     Text(
                         text = "No tasks yet",
                         style = TextStyle(
+                            fontFamily = HermieSerif,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Medium,
                             color = HermieGrey
@@ -105,8 +106,9 @@ fun TasksScreen(
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "Create a task and Hermie will break it down\ninto manageable steps",
+                        text = "Create a task and Hermie will break it down\ninto steps and execute them with tools",
                         style = TextStyle(
+                            fontFamily = HermieSerif,
                             fontSize = 14.sp,
                             color = HermieGrey.copy(alpha = 0.7f),
                             lineHeight = 20.sp
@@ -115,7 +117,6 @@ fun TasksScreen(
                 }
             }
         } else {
-            // Task list
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(16.dp),
@@ -132,12 +133,11 @@ fun TasksScreen(
         }
     }
 
-    // Create task dialog
     if (showCreateDialog) {
         CreateTaskDialog(
             onDismiss = { showCreateDialog = false },
-            onCreate = { title, desc ->
-                onCreateTask(title, desc)
+            onCreate = { title, desc, review ->
+                onCreateTask(title, desc, review)
                 showCreateDialog = false
             }
         )
@@ -161,27 +161,18 @@ private fun TaskCard(
             modifier = Modifier.padding(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Status indicator
             Box(
                 modifier = Modifier
                     .size(12.dp)
                     .clip(CircleShape)
-                    .background(
-                        when (task.status) {
-                            TaskStatus.COMPLETED -> HermieForest
-                            TaskStatus.IN_PROGRESS, TaskStatus.PLANNING -> HermieTerra
-                            TaskStatus.FAILED -> HermieError
-                            TaskStatus.PENDING -> HermieGrey
-                        }
-                    )
+                    .background(statusColor(task.status))
             )
-
             Spacer(Modifier.width(16.dp))
-
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = task.title,
                     style = TextStyle(
+                        fontFamily = HermieSerif,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = HermieForest
@@ -189,12 +180,16 @@ private fun TaskCard(
                 )
                 Spacer(Modifier.height(4.dp))
                 val completed = task.subtasks.count { it.status == TaskStatus.COMPLETED }
+                val failed = task.subtasks.count { it.status == TaskStatus.FAILED }
                 Text(
-                    text = "${completed}/${task.subtasks.size} steps  •  ${task.status.name.lowercase().replace('_', ' ')}",
-                    style = TextStyle(fontSize = 13.sp, color = HermieGrey)
+                    text = buildString {
+                        append("$completed/${task.subtasks.size} done")
+                        if (failed > 0) append(" ($failed failed)")
+                        append("  •  ${task.status.name.lowercase().replace('_', ' ')}")
+                    },
+                    style = TextStyle(fontFamily = HermieSerif, fontSize = 13.sp, color = HermieGrey)
                 )
             }
-
             IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
                 Icon(Icons.Filled.Close, "Delete", tint = HermieGrey, modifier = Modifier.size(16.dp))
             }
@@ -203,11 +198,12 @@ private fun TaskCard(
 }
 
 /**
- * Workflow view — shows subtasks as a connected pipeline (reference image 2 style).
+ * Workflow view with expandable subtask inspection.
  */
 @Composable
 private fun TaskWorkflowView(
     task: Task,
+    executionStatus: String?,
     onExecuteAll: () -> Unit,
     onExecuteNext: () -> Unit,
     modifier: Modifier = Modifier
@@ -225,6 +221,7 @@ private fun TaskWorkflowView(
                 Text(
                     text = task.title,
                     style = TextStyle(
+                        fontFamily = HermieSerif,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = HermieCream
@@ -233,8 +230,25 @@ private fun TaskWorkflowView(
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = task.description,
-                    style = TextStyle(fontSize = 14.sp, color = HermieCream.copy(alpha = 0.7f))
+                    style = TextStyle(fontFamily = HermieSerif, fontSize = 14.sp, color = HermieCream.copy(alpha = 0.7f))
                 )
+
+                // Execution status indicator
+                if (executionStatus != null) {
+                    Spacer(Modifier.height(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            color = HermieTerra,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = executionStatus,
+                            style = TextStyle(fontFamily = HermieSerif, fontSize = 12.sp, color = HermieTerra)
+                        )
+                    }
+                }
             }
         }
 
@@ -248,7 +262,7 @@ private fun TaskWorkflowView(
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             items(task.subtasks) { subtask ->
-                SubtaskNode(
+                ExpandableSubtaskNode(
                     subtask = subtask,
                     isLast = subtask == task.subtasks.lastOrNull()
                 )
@@ -263,7 +277,7 @@ private fun TaskWorkflowView(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             val hasNext = task.subtasks.any { it.status == TaskStatus.PENDING }
-            val isRunning = task.status == TaskStatus.IN_PROGRESS
+            val isRunning = task.status == TaskStatus.IN_PROGRESS || executionStatus != null
 
             OutlinedButton(
                 onClick = onExecuteNext,
@@ -272,7 +286,7 @@ private fun TaskWorkflowView(
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = HermieForest),
                 modifier = Modifier.weight(1f)
             ) {
-                Text("Next Step")
+                Text("Next Step", fontFamily = HermieSerif)
             }
             Button(
                 onClick = onExecuteAll,
@@ -281,23 +295,24 @@ private fun TaskWorkflowView(
                 colors = ButtonDefaults.buttonColors(containerColor = HermieForest),
                 modifier = Modifier.weight(1f)
             ) {
-                Text("Run All", color = HermieCream)
+                Text("Run All", color = HermieCream, fontFamily = HermieSerif)
             }
         }
     }
 }
 
+/**
+ * Expandable subtask node — click to reveal iteration history, tool calls, results.
+ */
 @Composable
-private fun SubtaskNode(subtask: SubTask, isLast: Boolean) {
-    val lineColor = when (subtask.status) {
-        TaskStatus.COMPLETED -> HermieForest
-        TaskStatus.IN_PROGRESS -> HermieTerra
-        else -> HermieTan
-    }
+private fun ExpandableSubtaskNode(subtask: SubTask, isLast: Boolean) {
+    var expanded by remember { mutableStateOf(false) }
+    val rotationAngle by animateFloatAsState(if (expanded) 180f else 0f, label = "arrow")
+    val hasDetails = subtask.iterations.isNotEmpty() || subtask.result != null
 
-    Row(
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    val lineColor = statusColor(subtask.status)
+
+    Row(modifier = Modifier.fillMaxWidth()) {
         // Connection line + dot
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -307,30 +322,25 @@ private fun SubtaskNode(subtask: SubTask, isLast: Boolean) {
                 modifier = Modifier
                     .size(16.dp)
                     .clip(CircleShape)
-                    .background(
-                        when (subtask.status) {
-                            TaskStatus.COMPLETED -> HermieForest
-                            TaskStatus.IN_PROGRESS -> HermieTerra
-                            TaskStatus.FAILED -> HermieError
-                            else -> HermieTan
-                        }
-                    ),
+                    .background(lineColor),
                 contentAlignment = Alignment.Center
             ) {
-                if (subtask.status == TaskStatus.COMPLETED) {
-                    Icon(
-                        Icons.Filled.Check,
-                        contentDescription = null,
-                        tint = HermieCream,
-                        modifier = Modifier.size(10.dp)
+                when (subtask.status) {
+                    TaskStatus.COMPLETED -> Icon(Icons.Filled.Check, null, tint = HermieCream, modifier = Modifier.size(10.dp))
+                    TaskStatus.FAILED -> Icon(Icons.Filled.Close, null, tint = HermieCream, modifier = Modifier.size(10.dp))
+                    TaskStatus.IN_PROGRESS -> CircularProgressIndicator(
+                        modifier = Modifier.size(10.dp),
+                        color = HermieCream,
+                        strokeWidth = 1.5.dp
                     )
+                    else -> {}
                 }
             }
             if (!isLast) {
                 Box(
                     modifier = Modifier
                         .width(2.dp)
-                        .height(60.dp)
+                        .height(if (expanded) 120.dp else 60.dp)
                         .background(lineColor.copy(alpha = 0.4f))
                 )
             }
@@ -344,30 +354,59 @@ private fun SubtaskNode(subtask: SubTask, isLast: Boolean) {
             color = when (subtask.status) {
                 TaskStatus.IN_PROGRESS -> HermieTerra.copy(alpha = 0.08f)
                 TaskStatus.COMPLETED -> HermieForest.copy(alpha = 0.05f)
+                TaskStatus.FAILED -> HermieError.copy(alpha = 0.05f)
                 else -> HermieOffWhite
             },
             modifier = Modifier
                 .weight(1f)
                 .padding(bottom = if (isLast) 0.dp else 8.dp)
+                .then(if (hasDetails) Modifier.clickable { expanded = !expanded } else Modifier)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = subtask.title,
-                    style = TextStyle(
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = HermieForest
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = subtask.title,
+                        style = TextStyle(
+                            fontFamily = HermieSerif,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = HermieForest
+                        ),
+                        modifier = Modifier.weight(1f)
                     )
-                )
-                if (subtask.result != null) {
+                    if (hasDetails) {
+                        Icon(
+                            Icons.Filled.KeyboardArrowDown,
+                            contentDescription = if (expanded) "Collapse" else "Expand",
+                            tint = HermieGrey,
+                            modifier = Modifier
+                                .size(20.dp)
+                                .rotate(rotationAngle)
+                        )
+                    }
+                }
+
+                // Show spawned badge
+                if (subtask.parentSubtaskId != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "spawned subtask",
+                        style = TextStyle(fontFamily = HermieSerif, fontSize = 11.sp, color = HermieTerra)
+                    )
+                }
+
+                // Summary result (always visible when completed)
+                if (subtask.result != null && !expanded) {
                     Spacer(Modifier.height(8.dp))
                     Text(
                         text = subtask.result,
-                        style = TextStyle(fontSize = 13.sp, color = HermieGrey, lineHeight = 18.sp),
-                        maxLines = 4
+                        style = TextStyle(fontFamily = HermieSerif, fontSize = 13.sp, color = HermieGrey, lineHeight = 18.sp),
+                        maxLines = 3
                     )
                 }
-                if (subtask.status == TaskStatus.IN_PROGRESS) {
+
+                // In-progress indicator
+                if (subtask.status == TaskStatus.IN_PROGRESS && subtask.iterations.isEmpty()) {
                     Spacer(Modifier.height(8.dp))
                     LinearProgressIndicator(
                         modifier = Modifier
@@ -378,18 +417,160 @@ private fun SubtaskNode(subtask: SubTask, isLast: Boolean) {
                         trackColor = HermieTan.copy(alpha = 0.3f)
                     )
                 }
+
+                // ── Expanded iteration details ──
+                AnimatedVisibility(visible = expanded) {
+                    Column(modifier = Modifier.padding(top = 12.dp)) {
+                        // Final result
+                        if (subtask.result != null) {
+                            ResultSection(
+                                label = if (subtask.status == TaskStatus.FAILED) "Failed" else "Result",
+                                text = subtask.result,
+                                isError = subtask.status == TaskStatus.FAILED
+                            )
+                            Spacer(Modifier.height(12.dp))
+                        }
+
+                        // Iteration history
+                        subtask.iterations.forEach { iteration ->
+                            IterationCard(iteration)
+                            Spacer(Modifier.height(8.dp))
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
+private fun ResultSection(label: String, text: String, isError: Boolean = false) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = if (isError) HermieError.copy(alpha = 0.08f) else HermieForest.copy(alpha = 0.08f)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = label,
+                style = TextStyle(
+                    fontFamily = HermieSerif,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isError) HermieError else HermieForest,
+                    letterSpacing = 1.sp
+                )
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = text,
+                style = TextStyle(fontFamily = HermieSerif, fontSize = 13.sp, color = HermieForest, lineHeight = 18.sp)
+            )
+        }
+    }
+}
+
+/**
+ * Single iteration card — shows tool calls and their results.
+ */
+@Composable
+private fun IterationCard(iteration: Iteration) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = HermieTan.copy(alpha = 0.12f)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = "Iteration ${iteration.index + 1}",
+                style = TextStyle(
+                    fontFamily = HermieSerif,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = HermieGrey,
+                    letterSpacing = 1.sp
+                )
+            )
+
+            if (iteration.toolCalls.isNotEmpty()) {
+                iteration.toolCalls.forEach { call ->
+                    Spacer(Modifier.height(6.dp))
+                    ToolCallRow(call)
+                }
+            } else {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "No tools called",
+                    style = TextStyle(fontFamily = HermieSerif, fontSize = 12.sp, color = HermieGrey.copy(alpha = 0.6f))
+                )
+            }
+
+            if (iteration.spawnedSubtasks.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Spawned ${iteration.spawnedSubtasks.size} subtask(s)",
+                    style = TextStyle(fontFamily = HermieSerif, fontSize = 12.sp, color = HermieTerra, fontWeight = FontWeight.Medium)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ToolCallRow(call: ToolCall) {
+    Column {
+        // Tool name + params
+        Text(
+            text = "${call.toolName}(${call.params.entries.joinToString(", ") { "${it.key}=\"${it.value}\"" }})",
+            style = TextStyle(
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                color = HermieForest,
+                fontWeight = FontWeight.Medium
+            )
+        )
+        Spacer(Modifier.height(2.dp))
+        // Result
+        Row(verticalAlignment = Alignment.Top) {
+            Box(
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(if (call.isSuccess) HermieForest else HermieError)
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = call.result.take(200) + if (call.result.length > 200) "..." else "",
+                style = TextStyle(
+                    fontFamily = HermieSerif,
+                    fontSize = 11.sp,
+                    color = if (call.isSuccess) HermieGrey else HermieError,
+                    lineHeight = 15.sp
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun statusColor(status: TaskStatus) = when (status) {
+    TaskStatus.COMPLETED -> HermieForest
+    TaskStatus.IN_PROGRESS, TaskStatus.PLANNING -> HermieTerra
+    TaskStatus.FAILED -> HermieError
+    TaskStatus.PENDING -> HermieTan
+    TaskStatus.AWAITING_REVIEW -> HermieTerra
+    TaskStatus.SCHEDULED -> HermieGrey
+    TaskStatus.QUEUED -> HermieTan
+    TaskStatus.PAUSED -> HermieGrey
+}
+
+@Composable
 private fun CreateTaskDialog(
     onDismiss: () -> Unit,
-    onCreate: (String, String) -> Unit
+    onCreate: (String, String, Boolean) -> Unit
 ) {
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
+    var requirePlanReview by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -398,7 +579,7 @@ private fun CreateTaskDialog(
         title = {
             Text(
                 "New Task",
-                style = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold, color = HermieForest)
+                style = TextStyle(fontFamily = HermieSerif, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = HermieForest)
             )
         },
         text = {
@@ -426,21 +607,40 @@ private fun CreateTaskDialog(
                         cursorColor = HermieForest
                     )
                 )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Checkbox(
+                        checked = requirePlanReview,
+                        onCheckedChange = { requirePlanReview = it },
+                        colors = CheckboxDefaults.colors(checkedColor = HermieForest)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = "Review plan before running",
+                        style = TextStyle(
+                            fontFamily = HermieSerif,
+                            fontSize = 14.sp,
+                            color = HermieForest
+                        )
+                    )
+                }
             }
         },
         confirmButton = {
             Button(
-                onClick = { onCreate(title, description) },
+                onClick = { onCreate(title, description, requirePlanReview) },
                 enabled = title.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(containerColor = HermieForest),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Create", color = HermieCream)
+                Text("Create", color = HermieCream, fontFamily = HermieSerif)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = HermieGrey)
+                Text("Cancel", color = HermieGrey, fontFamily = HermieSerif)
             }
         }
     )

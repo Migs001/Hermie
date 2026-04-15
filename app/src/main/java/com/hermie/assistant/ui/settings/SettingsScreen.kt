@@ -42,6 +42,7 @@ fun SettingsScreen(
     isTtsDownloading: Boolean = false
 ) {
     val activeModel by modelManager.activeModel.collectAsState()
+    val brainDownloadState by modelManager.downloadState.collectAsState()
 
     Column(
         modifier = Modifier
@@ -63,6 +64,7 @@ fun SettingsScreen(
             Text(
                 text = "Settings",
                 style = TextStyle(
+                    fontFamily = HermieSerif,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = HermieForest
@@ -96,19 +98,80 @@ fun SettingsScreen(
                     subtitle = "Active model"
                 )
 
+                // Show download progress if active
+                val downloading = brainDownloadState
+                if (downloading is ModelManager.DownloadState.Downloading) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        LinearProgressIndicator(
+                            progress = { downloading.progress },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp)),
+                            color = HermieTerra,
+                            trackColor = HermieTan.copy(alpha = 0.3f)
+                        )
+                        Text(
+                            "${(downloading.progress * 100).toInt()}%",
+                            style = TextStyle(fontSize = 12.sp, color = HermieTerra)
+                        )
+                    }
+                }
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    color = HermieTan.copy(alpha = 0.3f)
+                )
+
                 ModelManager.BASE_BRAIN_MODELS.forEach { model ->
                     val isDownloaded = modelManager.isDownloaded(model)
                     val isActive = activeModel?.id == model.id
+                    val isCurrentlyDownloading = downloading is ModelManager.DownloadState.Downloading
+
                     SettingsRow(
-                        icon = if (isActive) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
-                        title = model.displayName,
-                        subtitle = "${model.paramCount} • ${model.sizeMb}MB" +
-                            if (isDownloaded) " • Downloaded" else "",
-                        onClick = {
-                            if (isDownloaded) onSwitchModel(model)
-                            else onDownloadModel(model)
+                        icon = when {
+                            isActive -> Icons.Filled.CheckCircle
+                            isDownloaded -> Icons.Outlined.CheckCircle
+                            else -> Icons.Outlined.Download
                         },
-                        tintColor = if (isActive) HermieTerra else HermieGrey
+                        title = model.displayName,
+                        subtitle = buildString {
+                            append("${model.paramCount} • ${model.sizeMb}MB")
+                            when {
+                                isActive -> append(" • Active")
+                                isDownloaded -> append(" • Downloaded — tap to switch")
+                                else -> append(" • Tap to download")
+                            }
+                        },
+                        onClick = when {
+                            isActive -> null  // Already active, no action needed
+                            isDownloaded -> {{ onSwitchModel(model) }}
+                            isCurrentlyDownloading -> null  // Already downloading something
+                            else -> {{ onDownloadModel(model) }}
+                        },
+                        tintColor = when {
+                            isActive -> HermieTerra
+                            isDownloaded -> HermieForest
+                            else -> HermieGrey
+                        },
+                        trailingAction = if (isDownloaded && !isActive) {
+                            {
+                                IconButton(onClick = { onDeleteModel(model) }) {
+                                    Icon(
+                                        Icons.Outlined.Delete,
+                                        contentDescription = "Delete model",
+                                        tint = HermieGrey,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        } else null
                     )
                 }
             }
@@ -116,12 +179,21 @@ fun SettingsScreen(
             // ── Voice section ──
             SettingsSection("VOICE") {
                 // TTS model download
+                val voiceModel = ModelManager.VOICE_MODELS.firstOrNull()
+                val isVoiceDownloaded = voiceModel != null && modelManager.isDownloaded(voiceModel)
                 SettingsRow(
                     icon = Icons.Outlined.RecordVoiceOver,
                     title = if (isTtsReady) "Voice model ready" else if (isTtsDownloading) "Downloading..." else "Download voice model",
                     subtitle = if (isTtsReady) "Piper English • ~75 MB" else "Piper English TTS • ~75 MB",
                     onClick = if (!isTtsReady && !isTtsDownloading) onDownloadTtsModel else null,
-                    tintColor = if (isTtsReady) HermieTerra else HermieForest
+                    tintColor = if (isTtsReady) HermieTerra else HermieForest,
+                    trailingAction = if (isVoiceDownloaded) {
+                        {
+                            IconButton(onClick = { if (voiceModel != null) onDeleteModel(voiceModel) }) {
+                                Icon(Icons.Outlined.Delete, "Delete", tint = HermieGrey, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                    } else null
                 )
 
                 var voiceEnabled by remember { mutableStateOf(settings.voiceEnabled) }
@@ -151,6 +223,135 @@ fun SettingsScreen(
                 )
             }
 
+            // ── Mind (SLM + Embeddings) section ──
+            SettingsSection("MIND") {
+                // SLM classifier
+                val slmModel = ModelManager.SLM_MODELS.firstOrNull()
+                val isSlmDownloaded = slmModel != null && modelManager.isDownloaded(slmModel)
+                val slmDownloadState by modelManager.downloadStateFor(ModelType.SLM).collectAsState()
+                val isSlmDownloading = slmDownloadState is ModelManager.DownloadState.Downloading
+
+                SettingsRow(
+                    icon = Icons.Outlined.Psychology,
+                    title = when {
+                        isSlmDownloaded -> "Mind model ready"
+                        isSlmDownloading -> "Downloading mind model..."
+                        else -> "Download mind model"
+                    },
+                    subtitle = when {
+                        isSlmDownloaded -> "Qwen3 0.6B • Drip atomizer"
+                        isSlmDownloading -> {
+                            val progress = (slmDownloadState as? ModelManager.DownloadState.Downloading)?.progress ?: 0f
+                            "Qwen3 0.6B • ${(progress * 100).toInt()}%"
+                        }
+                        else -> "Qwen3 0.6B • ~400 MB"
+                    },
+                    onClick = if (!isSlmDownloaded && !isSlmDownloading && slmModel != null) {
+                        { onDownloadModel(slmModel) }
+                    } else null,
+                    tintColor = if (isSlmDownloaded) HermieTerra else HermieForest,
+                    trailingAction = if (isSlmDownloaded && slmModel != null) {
+                        {
+                            IconButton(onClick = { onDeleteModel(slmModel) }) {
+                                Icon(Icons.Outlined.Delete, "Delete", tint = HermieGrey, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                    } else null
+                )
+
+                // Embedding model
+                val embModel = ModelManager.MIND_MODELS.firstOrNull()
+                val isEmbDownloaded = embModel != null && modelManager.isDownloaded(embModel)
+                val embDownloadState by modelManager.downloadStateFor(ModelType.MIND).collectAsState()
+                val isEmbDownloading = embDownloadState is ModelManager.DownloadState.Downloading
+
+                SettingsRow(
+                    icon = Icons.Outlined.Memory,
+                    title = when {
+                        isEmbDownloaded -> "Embedding model ready"
+                        isEmbDownloading -> "Downloading embeddings..."
+                        else -> "Download embedding model"
+                    },
+                    subtitle = when {
+                        isEmbDownloaded -> "MiniLM-L6-v2 • Memory retrieval"
+                        isEmbDownloading -> {
+                            val progress = (embDownloadState as? ModelManager.DownloadState.Downloading)?.progress ?: 0f
+                            "MiniLM-L6-v2 • ${(progress * 100).toInt()}%"
+                        }
+                        else -> "MiniLM-L6-v2 • ~23 MB"
+                    },
+                    onClick = if (!isEmbDownloaded && !isEmbDownloading && embModel != null) {
+                        { onDownloadModel(embModel) }
+                    } else null,
+                    tintColor = if (isEmbDownloaded) HermieTerra else HermieForest,
+                    trailingAction = if (isEmbDownloaded && embModel != null) {
+                        {
+                            IconButton(onClick = { onDeleteModel(embModel) }) {
+                                Icon(Icons.Outlined.Delete, "Delete", tint = HermieGrey, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                    } else null
+                )
+            }
+
+            // ── Vision section ──
+            SettingsSection("VISION") {
+                val visionDownloadState by modelManager.downloadStateFor(ModelType.VISION).collectAsState()
+                val isVisionDownloading = visionDownloadState is ModelManager.DownloadState.Downloading
+
+                if (isVisionDownloading) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        LinearProgressIndicator(
+                            progress = { (visionDownloadState as? ModelManager.DownloadState.Downloading)?.progress ?: 0f },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp)),
+                            color = HermieTerra,
+                            trackColor = HermieTan.copy(alpha = 0.3f)
+                        )
+                        Text(
+                            "${((visionDownloadState as? ModelManager.DownloadState.Downloading)?.progress?.times(100))?.toInt() ?: 0}%",
+                            style = TextStyle(fontSize = 12.sp, color = HermieTerra)
+                        )
+                    }
+                }
+
+                ModelManager.VISION_MODELS.forEach { model ->
+                    val isDownloaded = modelManager.isDownloaded(model)
+
+                    SettingsRow(
+                        icon = when {
+                            isDownloaded -> Icons.Outlined.CheckCircle
+                            else -> Icons.Outlined.Download
+                        },
+                        title = model.displayName,
+                        subtitle = buildString {
+                            append("${model.paramCount} • ${model.sizeMb}MB")
+                            when {
+                                isDownloaded -> append(" • Downloaded (loaded during sleep)")
+                                else -> append(" • Wardrobe clothing categorization")
+                            }
+                        },
+                        onClick = when {
+                            isDownloaded -> {{ onDeleteModel(model) }}
+                            isVisionDownloading -> null
+                            else -> {{ onDownloadModel(model) }}
+                        },
+                        tintColor = when {
+                            isDownloaded -> HermieForest
+                            else -> HermieGrey
+                        }
+                    )
+                }
+            }
+
             // ── Background section ──
             SettingsSection("BACKGROUND") {
                 SettingsToggle(
@@ -167,8 +368,8 @@ fun SettingsScreen(
                 var overlayEnabled by remember { mutableStateOf(settings.overlayEnabled) }
                 SettingsToggle(
                     icon = Icons.Outlined.PictureInPicture,
-                    title = "Overlay bubbles",
-                    subtitle = "Show Hermie over other apps",
+                    title = "Notification bubbles",
+                    subtitle = "Screen time warnings pop up as bubbles",
                     checked = overlayEnabled,
                     onCheckedChange = {
                         overlayEnabled = it
@@ -206,6 +407,7 @@ private fun SettingsSection(title: String, content: @Composable ColumnScope.() -
         Text(
             text = title,
             style = TextStyle(
+                fontFamily = HermieSerif,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
                 color = HermieGrey,
@@ -231,7 +433,8 @@ private fun SettingsRow(
     title: String,
     subtitle: String? = null,
     onClick: (() -> Unit)? = null,
-    tintColor: androidx.compose.ui.graphics.Color = HermieForest
+    tintColor: androidx.compose.ui.graphics.Color = HermieForest,
+    trailingAction: (@Composable () -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
@@ -245,14 +448,26 @@ private fun SettingsRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Medium, color = HermieForest)
+                style = TextStyle(
+                    fontFamily = HermieSerif,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = HermieForest
+                )
             )
             if (subtitle != null) {
                 Text(
                     text = subtitle,
-                    style = TextStyle(fontSize = 12.sp, color = HermieGrey)
+                    style = TextStyle(
+                        fontFamily = HermieSerif,
+                        fontSize = 12.sp,
+                        color = HermieGrey
+                    )
                 )
             }
+        }
+        if (trailingAction != null) {
+            trailingAction()
         }
     }
 }
@@ -277,11 +492,20 @@ private fun SettingsToggle(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Medium, color = HermieForest)
+                style = TextStyle(
+                    fontFamily = HermieSerif,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = HermieForest
+                )
             )
             Text(
                 text = subtitle,
-                style = TextStyle(fontSize = 12.sp, color = HermieGrey)
+                style = TextStyle(
+                    fontFamily = HermieSerif,
+                    fontSize = 12.sp,
+                    color = HermieGrey
+                )
             )
         }
         Switch(
