@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Accessibility service configuration for Hermie.
+
+    This service subscribes to NO events and reads NO screen content.
+    Its sole purpose is to perform GLOBAL_ACTION_HOME when the user has
+    exceeded a screen time limit at escalation level 2 and has already
+    dismissed two warnings. It sends them back to the home screen once.
+
+    Granting this permission lets Hermie act as a gentle nudge mechanism
+    rather than a hard block — the user can always reopen the app, and
+    Hermie won't repeat the home action at the same escalation level.
+-->
+<accessibility-service
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault"
+    android:canPerformGestures="false"
+    android:canRequestFilterKeyEvents="false"
+    android:description="@string/accessibility_service_description"
+    android:notificationTimeout="0"
+    android:packageNames="" />

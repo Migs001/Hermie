@@ -1,0 +1,8 @@
+The user had Do Not Disturb on for {duration}. During that time, {total_count} notifications came in ({silenced_count} were silenced).
+
+Summarize what the user missed in a casual, concise way. Group by app/contact. Mention anything that seems important. Keep it brief — like a friend catching them up.
+
+Notifications:
+{notification_list}
+
+Summary:

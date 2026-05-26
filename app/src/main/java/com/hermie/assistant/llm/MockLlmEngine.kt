@@ -38,7 +38,8 @@ class MockLlmEngine : LlmEngine {
     override fun generate(
         messages: List<LlmEngine.Message>,
         maxTokens: Int,
-        temperature: Float
+        temperature: Float,
+        systemPrompt: String?
     ): Flow<String> = flow {
         // Simulate thinking delay
         delay(800)

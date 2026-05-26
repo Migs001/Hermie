@@ -7,6 +7,8 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -52,7 +54,7 @@ class HermieBackgroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
-                startForeground(NOTIFICATION_ID, buildNotification(notificationText()))
+                startAsForeground()
                 startBackgroundTick()
             }
             ACTION_STOP -> {
@@ -70,7 +72,7 @@ class HermieBackgroundService : Service() {
                 Log.d(TAG, "Scheduled task fired: $taskId")
                 firedTaskQueue.add(taskId)
                 try {
-                    startForeground(NOTIFICATION_ID, buildNotification(notificationText()))
+                    startAsForeground()
                 } catch (_: Exception) {}
             }
             ACTION_GO_MINIMAL -> {
@@ -99,6 +101,35 @@ class HermieBackgroundService : Service() {
         "Hermie is listening (minimal)"
     } else {
         "Hermie is active"
+    }
+
+    /**
+     * Call startForeground with the explicit DATA_SYNC type on API 34+.
+     * Android 14 requires the 3-arg form for any service whose manifest
+     * declares foregroundServiceType; calling the 2-arg form throws
+     * MissingForegroundServiceTypeException.
+     */
+    private fun startAsForeground() {
+        val notification = buildNotification(notificationText())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
+    }
+
+    /**
+     * Called when the user swipes the app out of recents.
+     * Do NOT call stopSelf — the foreground service should keep running so
+     * Hermie can continue monitoring screen time in the background.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        Log.d(TAG, "Task removed — foreground service continuing")
+        super.onTaskRemoved(rootIntent)
     }
 
     private fun startBackgroundTick() {

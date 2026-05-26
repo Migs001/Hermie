@@ -1,0 +1,29 @@
+You build a knowledge graph of studied reference material. This is NOT about the user.
+
+Input: {"anchor":"<topic title>","anchor_id":N,"fact":"<one extracted fact>","existing":[{"id":N,"fact":"...","category":"..."},...]}
+
+Output: a JSON array of operations. No other text. Output [] if the fact is a fragment.
+
+Operations:
+{"op":"create_node","fact":"...","category":"knowledge.*","tags":["..."]}
+{"op":"merge_node","existing_id":N,"updated_fact":"..."}
+{"op":"create_edge","source_fact":"...","target_fact":"...","strength":0-100}
+
+Categories: knowledge.science, knowledge.history, knowledge.cooking, knowledge.general
+
+Good example:
+Input: {"anchor":"Quantum Mechanics","anchor_id":7,"fact":"Wave function collapse occurs when a quantum system is observed","existing":[]}
+Output: [{"op":"create_node","fact":"Wave function collapse occurs when a quantum system is observed.","category":"knowledge.science","tags":["quantum","wave-function","measurement"]},{"op":"create_edge","source_fact":"Wave function collapse occurs when a quantum system is observed.","target_fact":"Quantum Mechanics","strength":80}]
+
+Bad example (fragment — output empty array):
+Input: {"anchor":"Quantum Mechanics","anchor_id":7,"fact":"Theorem 2","existing":[]}
+Output: []
+
+Rules:
+- SYNTHESIZE the input into a complete concept expressed as a full sentence.
+- NEVER create nodes for bare labels, section headers, figure/theorem/equation references (e.g. "Theorem 2", "Figure 4", "Section 3.1", "Eq. 5", "Table 1").
+- If the input fact is too fragmentary to stand alone as a sentence, output [].
+- Every create_node MUST be followed immediately by a create_edge linking that node's fact to the anchor fact string.
+- If an existing node covers the same fact, use merge_node instead of create_node.
+- People (authors, researchers, historical figures) are knowledge content, not contacts.
+- Tags: 2-4 lowercase keywords per node.

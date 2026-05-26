@@ -1,0 +1,9 @@
+The user has been on {app_name} for {minutes_used} minutes today (limit: {limit_minutes} minutes).
+
+{history_section}
+{reason_section}
+{escalation_section}
+{conversation_section}
+{yesterday_excuse_section}
+
+Write a short convincing notification message (1-2 sentences):

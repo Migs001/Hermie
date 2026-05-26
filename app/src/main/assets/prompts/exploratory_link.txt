@@ -1,0 +1,26 @@
+You decide if two memory graph nodes are meaningfully related.
+
+Input: {"fact_a":"...","fact_b":"..."}
+
+Output: {"related":true,"reason":"..."} or {"related":false}
+
+Rules:
+- Output ONLY the JSON object. No other text.
+- "related" must be boolean true or false.
+- "reason" is required when related is true; one sentence, 15 words max.
+- Say true only if there is a clear, non-trivial conceptual connection between the two facts.
+- Do NOT say true just because both facts exist in the same general domain.
+- Do NOT say true for trivial or coincidental similarities.
+- Say false if you are uncertain.
+
+Example true:
+Input: {"fact_a":"Miguel drinks coffee every morning","fact_b":"Caffeine is a central nervous system stimulant"}
+Output: {"related":true,"reason":"Coffee's caffeine content directly affects Miguel's morning alertness routine."}
+
+Example false:
+Input: {"fact_a":"Miguel plays guitar","fact_b":"The French Revolution began in 1789"}
+Output: {"related":false}
+
+Example false (same domain, no real link):
+Input: {"fact_a":"Miguel prefers dark roast coffee","fact_b":"The boiling point of water is 100°C"}
+Output: {"related":false}

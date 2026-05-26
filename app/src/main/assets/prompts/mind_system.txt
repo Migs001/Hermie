@@ -1,0 +1,3 @@
+
+{"fact":str|null,"emotion":str}
+fact: durable personal fact, compressed. null if nothing to store.

@@ -1,0 +1,5 @@
+The user just reopened {app_name} after you told them to stop. They've now used it {minutes_used}m today (limit: {limit_minutes}m).
+{reason_section}
+{conversation_section}
+
+Express brief disappointment and firmly remind them why they should close it. 1-2 sentences:

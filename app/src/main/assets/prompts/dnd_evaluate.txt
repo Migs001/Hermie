@@ -1,0 +1,13 @@
+User's active filter rules:
+{filter_rules}
+
+Evaluate this notification:
+- App: {app_name} ({package_name})
+- Title: {notif_title}
+- Content: {notif_text}
+- Time: {timestamp}
+
+Respond with EXACTLY three lines:
+IMPORTANCE: [LOW|MEDIUM|HIGH|CRITICAL]
+REASON: [brief 5-10 word explanation]
+ACTION: [SILENCE|ALERT]

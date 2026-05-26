@@ -1,0 +1,5 @@
+The user just swiped away your {app_name} notification. They've used it {minutes_used}m today (limit: {limit_minutes}m).
+{escalation_section}
+{conversation_section}
+
+Come back with a slightly sharper version of the previous nudge — you're not offended, just more direct. Acknowledge the swipe if it fits naturally. 1-2 sentences:

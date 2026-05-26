@@ -1,0 +1,5 @@
+The user replied to your {app_name} screen time warning with: "{reply_text}"
+They've been on it {minutes_used}m today (limit: {limit_minutes}m). {reason_section}
+{conversation_section}
+
+Acknowledge what they said, be witty and caring but not a pushover. Let them know you'll check back. 1-2 sentences:

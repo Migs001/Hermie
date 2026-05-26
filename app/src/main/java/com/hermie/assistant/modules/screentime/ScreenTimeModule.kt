@@ -342,18 +342,21 @@ class ScreenTimeModule : HermieModule, ToolModule, BackgroundModule {
         }
 
         return try {
-            val systemPrompt = loadSystemPrompt()
-            val fullPrompt = "[INSTRUCTIONS]\n$systemPrompt\n[/INSTRUCTIONS]\n\n$promptText"
-            val messages = listOf(LlmEngine.Message("user", fullPrompt))
+            val messages = listOf(LlmEngine.Message("user", promptText))
 
             val response = StringBuilder()
-            engine.generate(messages, maxTokens = maxLength).collect { token ->
+            engine.generate(messages, maxTokens = maxLength, systemPrompt = loadSystemPrompt()).collect { token ->
                 response.append(token)
                 if (response.length > maxLength * 4) return@collect  // ~4 chars/token safety
             }
 
             val result = cleanLlmResponse(response.toString())
-            if (result.isNotBlank()) result else fallback
+            if (result.isNotBlank()) {
+                result
+            } else {
+                Log.w(TAG, "LLM response empty after cleaning (raw=${response.length} chars, likely all thinking/tags) — using fallback")
+                fallback
+            }
         } catch (e: Exception) {
             Log.e(TAG, "LLM generation failed, using fallback", e)
             fallback
@@ -650,6 +653,12 @@ class ScreenTimeModule : HermieModule, ToolModule, BackgroundModule {
 
     private fun cleanLlmResponse(raw: String): String {
         return raw.trim()
+            // Strip Qwen3 thinking blocks FIRST — multi-line, case-insensitive.
+            // Must run before the generic <[^>]+> stripper because that would
+            // remove the <think> tags but leave the thinking content behind.
+            .replace(Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE), "")
+            // Also strip any unclosed <think> block (e.g. generation cut off inside thinking)
+            .replace(Regex("<think>[\\s\\S]*$", RegexOption.IGNORE_CASE), "")
             .replace(Regex("<emotion>\\w+</emotion>\\s*"), "")
             .replace(Regex("<[^>]+>"), "")
             .removePrefix("\"").removeSuffix("\"")

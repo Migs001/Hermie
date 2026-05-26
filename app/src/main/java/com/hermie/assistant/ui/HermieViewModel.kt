@@ -374,7 +374,6 @@ class HermieViewModel(application: Application) : AndroidViewModel(application) 
                     if (slmPath.isNotBlank()) {
                         Log.d(TAG, "Auto-loading SLM: ${slmModel.displayName} (ctx=${slmModel.contextSize})")
                         mindEngine.loadModel(slmPath, slmModel.useTurboCache, slmModel.contextSize)
-                        mindEngine.systemPrompt = MemoryModule.DRIP_SYSTEM_PROMPT
                         Log.d(TAG, "SLM loaded and ready (drip atomizer mode)")
                     }
                 } else {
@@ -488,12 +487,9 @@ class HermieViewModel(application: Application) : AndroidViewModel(application) 
             when (mode) {
                 MindMode.DRIP_ATOMIZER -> {
                     Log.d(TAG, "Mind mode → DRIP_ATOMIZER")
-                    mindEngine.systemPrompt = MemoryModule.DRIP_SYSTEM_PROMPT
                 }
                 MindMode.NOTIFICATION_FILTER -> {
                     Log.d(TAG, "Mind mode → NOTIFICATION_FILTER")
-                    val rules = getSmartDndModule()?.getActiveRules() ?: emptyList()
-                    mindEngine.systemPrompt = buildDndFilterPrompt(rules)
                 }
             }
         }
@@ -823,7 +819,6 @@ class HermieViewModel(application: Application) : AndroidViewModel(application) 
                     if (slmPath.isNotBlank() && engine.isLoaded) {
                         try {
                             mindEngine.loadModel(slmPath, slmModel.useTurboCache, slmModel.contextSize)
-                            mindEngine.systemPrompt = MemoryModule.DRIP_SYSTEM_PROMPT
                             Log.d(TAG, "SLM auto-loaded after download (drip atomizer mode)")
                         } catch (e: Exception) {
                             Log.e(TAG, "Failed to auto-load SLM after download", e)
@@ -1419,7 +1414,6 @@ class HermieViewModel(application: Application) : AndroidViewModel(application) 
                         if (slmPath.isNotBlank() && engine.isLoaded) {
                             try {
                                 mindEngine.loadModel(slmPath, model.useTurboCache, model.contextSize)
-                                mindEngine.systemPrompt = MemoryModule.DRIP_SYSTEM_PROMPT
                                 Log.d(TAG, "SLM loaded after download (drip atomizer mode)")
                             } catch (e: Exception) {
                                 Log.e(TAG, "Failed to load SLM after download", e)

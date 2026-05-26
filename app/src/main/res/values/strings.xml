@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Hermie</string>
+    <string name="accessibility_service_description">Lets Hermie send you to the home screen when you\'ve exceeded a screen time limit and dismissed two warnings. Hermie never reads screen content or tracks what you type.</string>
+</resources>

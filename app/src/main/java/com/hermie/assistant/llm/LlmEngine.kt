@@ -20,11 +20,15 @@ interface LlmEngine {
     /**
      * Generate a response given conversation messages.
      * Returns a Flow of token strings for streaming UI updates.
+     *
+     * [systemPrompt] — if non-null, sets the system prompt for this call only.
+     * Only honoured by [MindLlmEngine]; brain engines ignore it (they use their own state).
      */
     fun generate(
         messages: List<Message>,
         maxTokens: Int = 512,
-        temperature: Float = 0.7f
+        temperature: Float = 0.7f,
+        systemPrompt: String? = null
     ): Flow<String>
 
     /** Stop an in-progress generation */

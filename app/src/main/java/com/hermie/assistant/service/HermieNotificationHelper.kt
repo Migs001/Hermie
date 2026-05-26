@@ -7,21 +7,27 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
 import androidx.core.app.RemoteInput
+import androidx.core.content.FileProvider
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
-import com.hermie.assistant.R
 import com.hermie.assistant.modules.overlay.BubbleActivity
 import com.hermie.assistant.modules.screentime.ScreenTimeModule
 import com.hermie.assistant.ui.mascot.MascotMood
+import com.hermie.assistant.ui.mascot.renderMascotBitmap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
 
 /**
  * Helper for sending Hermie notifications with different mascot faces/icons.
@@ -36,7 +42,7 @@ object HermieNotificationHelper {
     private const val CHANNEL_TASKS = "hermie_tasks"
     private const val CHANNEL_ALERTS = "hermie_alerts"
     private const val CHANNEL_REMINDERS = "hermie_reminders"
-    private const val CHANNEL_SCREENTIME = "hermie_screentime"
+    private const val CHANNEL_SCREENTIME = "hermie_screentime_v2"
     private const val CHANNEL_DND_ALERT = "hermie_dnd_alert"
 
     const val KEY_REPLY_TEXT = "hermie_reply_text"
@@ -49,6 +55,35 @@ object HermieNotificationHelper {
     const val ACTION_BUBBLE_DISMISSED = "com.hermie.assistant.ACTION_BUBBLE_DISMISSED"
     const val EXTRA_ESCALATION_LEVEL = "extra_escalation_level"
 
+    /** Size in pixels for adaptive bitmap bubble icons (108dp equivalent at xxhdpi) */
+    private const val BUBBLE_ICON_SIZE_PX = 256
+
+    /**
+     * Render the mascot for [mood] to a PNG in the app's cache dir and return a
+     * FileProvider content:// URI.
+     *
+     * SystemUI (the bubble renderer) is a separate process and must be granted
+     * explicit read permission before the notification is posted — otherwise it
+     * silently fails to load the icon.
+     *
+     * Files are cached by mood; delete the bubble_icons dir to force a re-render.
+     */
+    private fun mascotIconUri(context: Context, mood: MascotMood): Uri {
+        val dir = File(context.cacheDir, "bubble_icons").apply { mkdirs() }
+        val file = File(dir, "mascot_${mood.name.lowercase()}.png")
+        if (!file.exists()) {
+            val bitmap = renderMascotBitmap(mood, BUBBLE_ICON_SIZE_PX)
+            FileOutputStream(file).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+        }
+        return FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file
+        )
+    }
+
     /** Stable notification ID per app package, so updates replace previous */
     fun screenTimeNotificationId(packageName: String): Int =
         ("screentime_$packageName").hashCode().and(0x7FFFFFFF)
@@ -59,6 +94,11 @@ object HermieNotificationHelper {
 
     fun initialize(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java)
+
+        // Delete the old hermie_screentime channel so it gets re-created at IMPORTANCE_HIGH.
+        // Once a channel is created, Android only allows the user (not the app) to raise its
+        // importance — deleting and re-creating with a new ID is the only app-side fix.
+        manager.deleteNotificationChannel("hermie_screentime")
 
         val channels = listOf(
             NotificationChannel(CHANNEL_TASKS, "Tasks", NotificationManager.IMPORTANCE_DEFAULT).apply {
@@ -102,11 +142,19 @@ object HermieNotificationHelper {
                 .setImportant(true)
                 .build()
 
+            val iconUri = mascotIconUri(context, MascotMood.IDLE)
+            context.grantUriPermission(
+                "com.android.systemui",
+                iconUri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            val icon = IconCompat.createWithAdaptiveBitmapContentUri(iconUri)
+
             val shortcut = ShortcutInfoCompat.Builder(context, SHORTCUT_HERMIE)
                 .setShortLabel("Hermie")
                 .setLongLived(true)
                 .setCategories(setOf(BUBBLE_CATEGORY))
-                .setIcon(IconCompat.createWithResource(context, R.mipmap.ic_launcher))
+                .setIcon(icon)
                 .setIntent(Intent(context, BubbleActivity::class.java).apply {
                     action = Intent.ACTION_VIEW
                 })
@@ -268,11 +316,21 @@ object HermieNotificationHelper {
             .setShortcutId(SHORTCUT_HERMIE)
             .addPerson(hermiePerson)
 
-        // Add bubble metadata
+        // Add bubble metadata — TYPE_URI_ADAPTIVE_BITMAP icon (content:// via FileProvider).
+        // TYPE_ADAPTIVE_BITMAP (in-memory) triggers a warning and is silently rejected on
+        // Pixel 8+ and recent Samsung devices; TYPE_URI_ADAPTIVE_BITMAP is required.
         try {
+            val iconUri = mascotIconUri(context, mood)
+            context.grantUriPermission(
+                "com.android.systemui",
+                iconUri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            val bubbleIcon = IconCompat.createWithAdaptiveBitmapContentUri(iconUri)
+
             val bubbleMetadata = NotificationCompat.BubbleMetadata.Builder(
                 bubblePendingIntent,
-                IconCompat.createWithResource(context, R.mipmap.ic_launcher)
+                bubbleIcon
             )
                 .setDesiredHeight(600)
                 .setAutoExpandBubble(true)
@@ -280,13 +338,17 @@ object HermieNotificationHelper {
                 .build()
 
             builder.setBubbleMetadata(bubbleMetadata)
-            Log.d("HermieNotif", "Bubble metadata added for $packageName")
+            Log.d("HermieNotif", "Bubble metadata added for $packageName (mood=$mood, iconUri=$iconUri)")
         } catch (e: Exception) {
             Log.w("HermieNotif", "Bubble metadata not supported, falling back to regular notification", e)
         }
 
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.notify(notifId, builder.build())
+
+        val areEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
+        val channelImportance = manager.getNotificationChannel(CHANNEL_SCREENTIME)?.importance
+        Log.d("HermieNotif", "Notification posted id=$notifId. enabled=$areEnabled channelImportance=$channelImportance")
     }
 
     /**

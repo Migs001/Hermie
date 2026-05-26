@@ -216,7 +216,8 @@ class LlamaNativeEngine(context: Context) : LlmEngine {
     override fun generate(
         messages: List<LlmEngine.Message>,
         maxTokens: Int,
-        temperature: Float
+        temperature: Float,
+        systemPrompt: String?
     ): Flow<String> {
         if (!isLoaded) {
             Log.w(TAG, "Generate called but model not loaded (state=${engine.state.value})")

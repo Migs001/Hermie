@@ -1,0 +1,4 @@
+The user dismissed your {app_name} warnings twice. You're done pushing.
+{conversation_section}
+
+Give up gracefully — cheeky, not passive-aggressive. Not their parent. One sentence:

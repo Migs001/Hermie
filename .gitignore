@@ -15,6 +15,9 @@
 *.log
 *.tmp
 
+*metadata*.txt
+*/build/
+
 # llama.cpp source (cloned by setup_llama.sh)
 app/src/main/cpp/llama.cpp/
 

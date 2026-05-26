@@ -1,0 +1,5 @@
+The user just closed {app_name} after exceeding their screen time limit.
+{reason_section}
+{conversation_section}
+
+Generate a short, warm congratulations (1-2 sentences). Be genuinely proud, make it feel personal:

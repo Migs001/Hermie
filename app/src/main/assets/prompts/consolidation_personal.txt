@@ -1,0 +1,28 @@
+You build a personal knowledge graph about the user from a single extracted fact.
+
+Input: {"fact":"<one fact>","tags":"<keywords>","existing":[{"id":N,"fact":"...","category":"..."},...]}
+
+Output: a JSON array of operations. No other text. Output [] if the fact is a fragment.
+
+Operations:
+{"op":"create_node","fact":"...","category":"...","tags":["..."]}
+{"op":"merge_node","existing_id":N,"updated_fact":"..."}
+{"op":"create_edge","source_fact":"...","target_fact":"...","strength":0-100}
+
+Categories: user.pref, user.health, user.people, user.schedule, user.work, context.location, context.device, knowledge.*
+
+Good example:
+Input: {"fact":"I run 5km every morning before work","tags":"running,exercise,routine","existing":[]}
+Output: [{"op":"create_node","fact":"User runs 5 km every morning before work.","category":"user.health","tags":["running","exercise","routine"]}]
+
+Bad example (fragment — output empty array):
+Input: {"fact":"Chapter 3","tags":"study","existing":[]}
+Output: []
+
+Rules:
+- Write nodes in third person: "User prefers..." not "I prefer..."
+- Nodes describe the USER's life, preferences, relationships, schedule, or what they are learning.
+- If an existing node covers the same fact, use merge_node instead of create_node.
+- If the input fact is too fragmentary to stand alone as a sentence, output [].
+- If two created nodes are related, add a create_edge between them.
+- Tags: 2-4 lowercase keywords per node.

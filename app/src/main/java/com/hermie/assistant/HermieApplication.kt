@@ -9,6 +9,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.hermie.assistant.service.HermieBackgroundService
 import com.hermie.assistant.service.HermieNotificationHelper
 import kotlinx.coroutines.*
+import java.io.File
 
 class HermieApplication : Application() {
 
@@ -17,8 +18,34 @@ class HermieApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        wipeBubbleIconCacheIfNeeded()
         HermieNotificationHelper.initialize(this)
+        // Start the foreground service immediately so Hermie survives when the user
+        // swipes the task away. Service re-issues startForeground on each start.
+        try {
+            HermieBackgroundService.start(this)
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not auto-start background service", e)
+        }
         registerProcessLifecycleObserver()
+    }
+
+    /**
+     * Wipe the on-disk bubble icon cache when [BUBBLE_ICON_SCHEMA_VERSION] is bumped.
+     * `HermieNotificationHelper.mascotIconUri` will regenerate files on next use.
+     * Bump [BUBBLE_ICON_SCHEMA_VERSION] whenever [MascotBitmapRenderer] drawing logic changes.
+     */
+    private fun wipeBubbleIconCacheIfNeeded() {
+        val prefs = getSharedPreferences("hermie_settings", MODE_PRIVATE)
+        val stored = prefs.getInt(KEY_BUBBLE_ICON_SCHEMA, 0)
+        if (stored < BUBBLE_ICON_SCHEMA_VERSION) {
+            val cacheDir = File(cacheDir, "bubble_icons")
+            if (cacheDir.exists()) {
+                cacheDir.deleteRecursively()
+                Log.d(TAG, "Bubble icon cache wiped (schema $stored → $BUBBLE_ICON_SCHEMA_VERSION)")
+            }
+            prefs.edit().putInt(KEY_BUBBLE_ICON_SCHEMA, BUBBLE_ICON_SCHEMA_VERSION).apply()
+        }
     }
 
     /**
@@ -66,6 +93,10 @@ class HermieApplication : Application() {
 
     companion object {
         private const val TAG = "HermieApplication"
-        private const val MINIMAL_DEBOUNCE_MS = 5_000L
+        private const val MINIMAL_DEBOUNCE_MS = 30_000L
+
+        /** Bump to force a bubble icon cache wipe on next launch. */
+        private const val BUBBLE_ICON_SCHEMA_VERSION = 1
+        private const val KEY_BUBBLE_ICON_SCHEMA = "bubble_icon_schema_version"
     }
 }

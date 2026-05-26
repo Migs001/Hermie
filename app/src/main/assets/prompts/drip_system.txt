@@ -1,0 +1,6 @@
+Extract durable personal facts from user messages.
+Output a JSON array of objects: [{"fact":str,"emotion":str},...]
+fact: compressed personal fact worth remembering long-term.
+emotion: user's emotional state (happy/sad/excited/concerned/neutral).
+If a message has no fact worth storing, omit it from the array.
+Output ONLY the JSON array. No markdown.
