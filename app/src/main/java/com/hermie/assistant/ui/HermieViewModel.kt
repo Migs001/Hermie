@@ -361,7 +361,7 @@ class HermieViewModel(application: Application) : AndroidViewModel(application) 
             kotlinx.coroutines.delay(3000)
 
             // Don't load SLM during sleep/study mode — brain uses slot 0 exclusively
-            // and MindEngine switching to slot 1 causes conflicts
+            // and MindEngine switching to slot 3 causes conflicts
             if (_isSleepMode.value || _isStudyMode.value) {
                 Log.d(TAG, "SLM: Sleep/study mode active — deferring SLM load")
                 return@launch
@@ -2035,7 +2035,7 @@ class HermieViewModel(application: Application) : AndroidViewModel(application) 
                     appendSleepLog("--- Phase 3: Wardrobe Categorization ---")
                     appendSleepLog("$wardrobePhotos photos to categorize")
 
-                    // Unload SLM first — it uses slot 1 and can race with vision loading on slot 0
+                    // Unload SLM first — it uses slot 3 and can race with vision loading on slot 0
                     try {
                         if (mindEngine.isLoaded) {
                             appendSleepLog("Unloading SLM to free memory...")

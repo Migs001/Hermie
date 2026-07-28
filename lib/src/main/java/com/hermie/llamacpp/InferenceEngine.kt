@@ -100,6 +100,41 @@ interface InferenceEngine {
      */
     fun destroy()
 
+    // ── Multi-slot / shared context / LoRA ──
+
+    /**
+     * Create a new llama_context on the target slot, sharing the source slot's model.
+     * The target slot gets its own sampler, batch, and chat templates.
+     * Returns true on success.
+     */
+    suspend fun createSharedContext(sourceSlot: Int, targetSlot: Int, contextSize: Int, useTurboCache: Boolean = false): Boolean
+
+    /**
+     * Destroy a slot's context (and model if it owns it).
+     */
+    suspend fun destroySlotContext(slot: Int)
+
+    /**
+     * Load a LoRA adapter from a GGUF file. Returns an opaque handle (0 on failure).
+     */
+    suspend fun loadLoraAdapter(adapterPath: String): Long
+
+    /**
+     * Apply a loaded LoRA adapter to the active slot's context.
+     * Returns true on success.
+     */
+    suspend fun applyLoraAdapter(adapterHandle: Long, scale: Float = 1.0f): Boolean
+
+    /**
+     * Remove a LoRA adapter from the active slot's context (does not free the handle).
+     */
+    suspend fun removeLoraAdapter(adapterHandle: Long)
+
+    /**
+     * Free a LoRA adapter handle. Must be removed from all contexts first.
+     */
+    suspend fun freeLoraAdapter(adapterHandle: Long)
+
     /**
      * States of the inference engine
      */

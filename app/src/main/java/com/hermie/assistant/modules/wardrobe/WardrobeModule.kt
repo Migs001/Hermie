@@ -213,7 +213,7 @@ class WardrobeModule : HermieModule, ScreenModule {
 
         onProgress("Unloading brain model for wardrobe processing...")
 
-        // Ensure we're on slot 0 before any operations — prevents race with MindEngine on slot 1
+        // Ensure we're on slot 0 before any operations — prevents race with MindEngine on slot 3
         try {
             rawEngine.setActiveSlot(0)
         } catch (e: Exception) {

@@ -18,7 +18,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * and uses the brain LLM (4B) to extract atomic facts into the memory graph.
  *
  * Study mode is similar to sleep mode: the banner expands, progress is shown,
- * and the LLM is dedicated to fact extraction. The SLM (slot 1) stays
+ * and the LLM is dedicated to fact extraction. The SLM (slot 3) stays
  * operational so DND and Screen Time keep working.
  */
 class StudyModule : HermieModule, ScreenModule {

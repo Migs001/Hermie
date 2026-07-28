@@ -17,6 +17,10 @@
 
 *metadata*.txt
 */build/
+build/
+.gradle/
+.idea/
+*.iml/
 
 # llama.cpp source (cloned by setup_llama.sh)
 app/src/main/cpp/llama.cpp/

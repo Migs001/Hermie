@@ -32,10 +32,10 @@ class LlamaNativeEngine(context: Context) : LlmEngine {
         const val THINK_PREFIX = "\u0000THINK:"
 
         /**
-         * Shared mutex that serializes slot-level operations across brain (slot 0)
-         * and SLM (slot 1). Without this, MindLlmEngine's multi-step generate flow
-         * (setActiveSlot→resetContext→setSystemPrompt→generate→setActiveSlot) can
-         * interleave with LlamaNativeEngine's loadModel/generate/resetContext calls,
+         * Shared mutex that serializes slot-level operations across brain (slot 0),
+         * router (slot 2), and mind (slot 3). Without this, MindLlmEngine's multi-step
+         * generate flow (setActiveSlot→resetContext→setSystemPrompt→generate→setActiveSlot)
+         * can interleave with LlamaNativeEngine's loadModel/generate/resetContext calls,
          * causing system prompts to land on the wrong slot.
          */
         val slotMutex = Mutex()
@@ -135,9 +135,9 @@ class LlamaNativeEngine(context: Context) : LlmEngine {
             }
 
             try {
-                // Hold slotMutex to prevent SLM from switching slots between
+                // Hold slotMutex to prevent SLM/router from switching slots between
                 // loadModel and setSystemPrompt (which would cause the brain's
-                // system prompt to land on slot 1)
+                // system prompt to land on the wrong slot)
                 slotMutex.withLock {
                     Log.d(TAG, "Loading model: $modelPath (engine state: ${engine.state.value})")
                     currentModelPath = modelPath

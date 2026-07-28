@@ -11,7 +11,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * Small Language Model engine — stateless classifier running on slot 1.
+ * Small Language Model engine — stateless classifier running on slot 3.
  *
  * Used as a "mind" for memory classification via the fine-tuned SmolLM2-360M-Instruct-Mem-Cat.
  * Each prediction is independent: context is fully reset, system prompt re-processed,
@@ -29,7 +29,7 @@ class MindLlmEngine(context: Context) : LlmEngine {
 
     companion object {
         private const val TAG = "MindEngine"
-        private const val SLOT = 1
+        const val SLOT = 3
     }
 
     private val engine: InferenceEngine = LlamaCpp.getInferenceEngine(context)

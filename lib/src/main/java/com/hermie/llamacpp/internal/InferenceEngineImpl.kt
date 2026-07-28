@@ -104,6 +104,28 @@ internal class InferenceEngineImpl private constructor(
         userPrompt: String, imageRgb: ByteArray, width: Int, height: Int, predictLength: Int
     ): Int
 
+    // ── Multi-slot / shared context / LoRA ──
+
+    @FastNative
+    private external fun nativeCreateSharedContext(
+        sourceSlot: Int, targetSlot: Int, contextSize: Int, useTurboCache: Boolean
+    ): Int
+
+    @FastNative
+    private external fun nativeDestroySlotContext(slot: Int)
+
+    @FastNative
+    private external fun nativeLoraAdapterInit(adapterPath: String): Long
+
+    @FastNative
+    private external fun nativeLoraAdapterSet(adapterHandle: Long, scale: Float): Int
+
+    @FastNative
+    private external fun nativeLoraAdapterRemove(adapterHandle: Long)
+
+    @FastNative
+    private external fun nativeDestroyLoraAdapter(adapterHandle: Long)
+
     @FastNative
     private external fun shutdown()
 
@@ -111,8 +133,8 @@ internal class InferenceEngineImpl private constructor(
         MutableStateFlow<InferenceEngine.State>(InferenceEngine.State.Uninitialized)
     override val state: StateFlow<InferenceEngine.State> = _state.asStateFlow()
 
-    // Per-slot state tracking for dual-model support
-    private val NUM_SLOTS = 2
+    // Per-slot state tracking for multi-model support
+    val NUM_SLOTS = 4
     private var activeSlot = 0
     private val slotStates = Array(NUM_SLOTS) { InferenceEngine.State.Uninitialized as InferenceEngine.State }
     private val slotReadyForSystemPrompt = BooleanArray(NUM_SLOTS)
@@ -423,6 +445,59 @@ internal class InferenceEngineImpl private constructor(
         Log.i(TAG, "Generation cancellation requested")
     }
 
+    // ── Multi-slot / shared context / LoRA wrappers ──
+
+    /** Create a shared context on a target slot sharing source slot's model. */
+    override suspend fun createSharedContext(sourceSlot: Int, targetSlot: Int, contextSize: Int, useTurboCache: Boolean): Boolean {
+        return withContext(llamaDispatcher) {
+            val result = nativeCreateSharedContext(sourceSlot, targetSlot, contextSize, useTurboCache)
+            if (result == 0) {
+                slotStates[targetSlot] = InferenceEngine.State.ModelReady
+                slotReadyForSystemPrompt[targetSlot] = true
+                Log.i(TAG, "Shared context created: slot $targetSlot shares model from slot $sourceSlot")
+            }
+            result == 0
+        }
+    }
+
+    /** Destroy a slot's context (and model if it owns it). Works on any slot regardless of active slot. */
+    override suspend fun destroySlotContext(slot: Int) {
+        withContext(llamaDispatcher) {
+            nativeDestroySlotContext(slot)
+            slotStates[slot] = InferenceEngine.State.Initialized
+            slotReadyForSystemPrompt[slot] = false
+            Log.i(TAG, "Slot $slot context destroyed")
+        }
+    }
+
+    /** Load a LoRA adapter from a GGUF file. Returns handle (0 = failure). */
+    override suspend fun loadLoraAdapter(adapterPath: String): Long {
+        return withContext(llamaDispatcher) {
+            nativeLoraAdapterInit(adapterPath)
+        }
+    }
+
+    /** Apply a loaded LoRA adapter to the active slot's context. */
+    override suspend fun applyLoraAdapter(adapterHandle: Long, scale: Float): Boolean {
+        return withContext(llamaDispatcher) {
+            nativeLoraAdapterSet(adapterHandle, scale) == 0
+        }
+    }
+
+    /** Remove a LoRA adapter from the active slot's context (does not free the adapter). */
+    override suspend fun removeLoraAdapter(adapterHandle: Long) {
+        withContext(llamaDispatcher) {
+            nativeLoraAdapterRemove(adapterHandle)
+        }
+    }
+
+    /** Free a LoRA adapter handle. Must be removed from all contexts first. */
+    override suspend fun freeLoraAdapter(adapterHandle: Long) {
+        withContext(llamaDispatcher) {
+            nativeDestroyLoraAdapter(adapterHandle)
+        }
+    }
+
     /**
      * Unloads the model and frees resources, or reset error states
      */
@@ -461,13 +536,17 @@ internal class InferenceEngineImpl private constructor(
     override fun destroy() {
         _cancelGeneration = true
         runBlocking(llamaDispatcher) {
-            // Unload all loaded slots
+            // Unload all loaded slots via the native shutdown (handles owns_model)
             for (i in 0 until NUM_SLOTS) {
                 val slotState = slotStates[i]
                 if (slotState !is InferenceEngine.State.Uninitialized &&
                     slotState !is InferenceEngine.State.Initialized) {
-                    nativeSetActiveSlot(i)
-                    unload()
+                    if (i == activeSlot) {
+                        unload()
+                    } else {
+                        nativeSetActiveSlot(i)
+                        unload()
+                    }
                     slotStates[i] = InferenceEngine.State.Initialized
                 }
             }

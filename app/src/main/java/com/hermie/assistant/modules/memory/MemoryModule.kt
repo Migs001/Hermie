@@ -646,7 +646,7 @@ class MemoryModule : HermieModule, ToolModule, BackgroundModule {
     override suspend fun onBackgroundTick() {
         // Embedding uses a separate TFLite engine — always safe to run.
         embedPending()
-        // Drip atomizer uses SLM on slot 1 — safe if brain isn't generating.
+        // Drip atomizer uses SLM on slot 3 — safe if brain isn't generating.
         // Consolidation and pruning are DEFERRED TO SLEEP MODE ONLY because
         // they hijack the brain's system prompt and reset its KV cache.
         dripAtomize()

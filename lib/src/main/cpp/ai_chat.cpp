@@ -25,8 +25,8 @@ static std::string join(const std::vector<T> &values, const std::string &delim) 
 }
 
 /**
- * LLama resources: dual-slot system for running 2 models simultaneously.
- * Slot 0 = main brain LLM, Slot 1 = small mind LLM.
+ * LLama resources: multi-slot system for running up to 4 models simultaneously.
+ * Slot 0 = Brain (Chat), Slot 1 = Brain (Tasks, shared model), Slot 2 = Router (shared model + LoRA), Slot 3 = Mind.
  */
 constexpr int   N_THREADS_MIN           = 2;
 constexpr int   N_THREADS_MAX           = 4;
@@ -39,7 +39,7 @@ constexpr int   OVERFLOW_HEADROOM       = 4;
 constexpr int   BATCH_SIZE              = 512;
 constexpr float DEFAULT_SAMPLER_TEMP    = 0.3f;
 
-constexpr int   NUM_SLOTS               = 2;
+constexpr int   NUM_SLOTS               = 4;
 
 /**
  * Per-model slot holding all state for one loaded model.
@@ -47,6 +47,8 @@ constexpr int   NUM_SLOTS               = 2;
 struct ModelSlot {
     llama_model                      * model          = nullptr;
     llama_context                    * context        = nullptr;
+    bool                               owns_model      = true;    // if false, don't free model on unload
+    llama_adapter_lora               * lora           = nullptr;  // per-slot LoRA adapter
     llama_batch                        batch          = {};
     common_chat_templates_ptr          chat_templates = nullptr;
     common_sampler                   * sampler        = nullptr;
@@ -85,7 +87,7 @@ Java_com_hermie_llamacpp_internal_InferenceEngineImpl_init(JNIEnv *env, jobject 
     env->ReleaseStringUTFChars(nativeLibDir, path_to_backend);
 
     llama_backend_init();
-    LOGi("Backend initiated; Log handler set. Dual-slot engine ready (%d slots).", NUM_SLOTS);
+    LOGi("Backend initiated; Log handler set. Multi-slot engine ready (%d slots).", NUM_SLOTS);
 }
 
 extern "C"
@@ -127,6 +129,97 @@ Java_com_hermie_llamacpp_internal_InferenceEngineImpl_nativeResetSlotContext(JNI
     }
 
     LOGi("resetSlotContext: slot %d context cleared", g_active_slot);
+}
+
+/**
+ * Create a new llama_context on a target slot, sharing an existing slot's model.
+ * The target slot gets its own context, sampler, batch, and chat templates.
+ * The target slot does NOT own the model — unload() will only free the context.
+ *
+ * @param sourceSlot   Index of the slot whose model pointer to share
+ * @param targetSlot   Index of the slot to create the context on
+ * @param contextSize  KV cache size for the new context
+ * @param useTurboCache  Use Q8_0 vs F16 KV cache types
+ * @return 0 on success, non-zero on error
+ */
+extern "C"
+JNIEXPORT jint JNICALL
+Java_com_hermie_llamacpp_internal_InferenceEngineImpl_nativeCreateSharedContext(
+        JNIEnv *env, jobject /*thiz*/,
+        jint sourceSlot, jint targetSlot, jint contextSize, jboolean useTurboCache)
+{
+    if (sourceSlot < 0 || sourceSlot >= NUM_SLOTS || targetSlot < 0 || targetSlot >= NUM_SLOTS) {
+        LOGe("nativeCreateSharedContext: invalid slots (source=%d, target=%d, max=%d)",
+             (int)sourceSlot, (int)targetSlot, NUM_SLOTS - 1);
+        return -1;
+    }
+    if (sourceSlot == targetSlot) {
+        LOGe("nativeCreateSharedContext: source and target slots must differ");
+        return -2;
+    }
+    if (!g_slots[sourceSlot].model) {
+        LOGe("nativeCreateSharedContext: source slot %d has no model loaded", (int)sourceSlot);
+        return -3;
+    }
+    if (g_slots[targetSlot].context) {
+        LOGe("nativeCreateSharedContext: target slot %d already has a context — unload first", (int)targetSlot);
+        return -4;
+    }
+    auto &t = g_slots[targetSlot];
+
+    // Share the model pointer — target does NOT own the model
+    t.model = g_slots[sourceSlot].model;
+    t.owns_model = false;
+
+    // Create context, sampler, batch, chat template via shared helper
+    int result = initSlotContext(t, (int)contextSize, useTurboCache);
+    if (result != 0) {
+        LOGe("nativeCreateSharedContext: initSlotContext failed on target slot %d", (int)targetSlot);
+        t.model = nullptr;
+        t.owns_model = true;
+        return -5;
+    }
+
+    LOGi("nativeCreateSharedContext: created shared context on slot %d from slot %d (ctx=%d)",
+         (int)targetSlot, (int)sourceSlot, (int)contextSize);
+    return 0;
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_hermie_llamacpp_internal_InferenceEngineImpl_nativeDestroySlotContext(JNIEnv *, jobject /*thiz*/, jint slot)
+{
+    if (slot < 0 || slot >= NUM_SLOTS) {
+        LOGe("nativeDestroySlotContext: invalid slot %d", (int)slot);
+        return;
+    }
+    auto &s = g_slots[slot];
+
+    // Remove LoRA adapter from context before freeing context
+    if (s.lora && s.context) {
+        llama_set_adapters_lora(s.context, nullptr, 0, nullptr);
+        s.lora = nullptr;
+    }
+    if (s.mtmd_ctx) { mtmd_free(s.mtmd_ctx); s.mtmd_ctx = nullptr; }
+    if (s.sampler) { common_sampler_free(s.sampler); s.sampler = nullptr; }
+    s.chat_templates.reset();
+    if (s.batch.token) { llama_batch_free(s.batch); s.batch = {}; }
+    if (s.context) { llama_free(s.context); s.context = nullptr; }
+    s.chat_msgs.clear();
+    s.system_prompt_position = 0;
+    s.current_position = 0;
+    s.stop_generation_position = 0;
+    s.cached_token_chars.clear();
+    s.assistant_ss.str("");
+
+    // Only free model if this slot owns it
+    if (s.model && s.owns_model) {
+        llama_model_free(s.model);
+    }
+    s.model = nullptr;
+    s.owns_model = true;  // reset to default
+
+    LOGi("nativeDestroySlotContext: slot %d destroyed", (int)slot);
 }
 
 extern "C"
@@ -193,6 +286,30 @@ static common_sampler *new_sampler(llama_model *model, float temp) {
     return common_sampler_init(model, sparams);
 }
 
+/**
+ * Initialize sampler, batch, and chat template for a slot.
+ * Used by both prepare() (active slot) and nativeCreateSharedContext (target slot).
+ */
+static int initSlotContext(ModelSlot &slot, int contextSize, bool useTurboCache) {
+    llama_context *context;
+    const int n_ctx = contextSize;
+
+    if (useTurboCache) {
+        context = init_context(slot.model, n_ctx,
+                               GGML_TYPE_Q8_0, GGML_TYPE_Q8_0);
+    } else {
+        context = init_context(slot.model, n_ctx,
+                               GGML_TYPE_F16, GGML_TYPE_F16);
+    }
+
+    if (!context) { return 1; }
+    slot.context = context;
+    slot.batch = llama_batch_init(BATCH_SIZE, 0, 1);
+    slot.chat_templates = common_chat_templates_init(slot.model, "");
+    slot.sampler = new_sampler(slot.model, DEFAULT_SAMPLER_TEMP);
+    return 0;
+}
+
 extern "C"
 JNIEXPORT jint JNICALL
 Java_com_hermie_llamacpp_internal_InferenceEngineImpl_prepare(
@@ -201,24 +318,11 @@ Java_com_hermie_llamacpp_internal_InferenceEngineImpl_prepare(
         jboolean use_turbo_cache,
         jint context_size
 ) {
-    llama_context *context;
-    const int n_ctx = (int)context_size;
-
-    if (use_turbo_cache) {
-        context = init_context(S().model, n_ctx,
-                               GGML_TYPE_Q8_0, GGML_TYPE_Q8_0);
-    } else {
-        context = init_context(S().model, n_ctx,
-                               GGML_TYPE_F16, GGML_TYPE_F16);
+    int result = initSlotContext(S(), (int)context_size, use_turbo_cache);
+    if (result == 0) {
+        LOGi("prepare: slot %d ready", g_active_slot);
     }
-
-    if (!context) { return 1; }
-    S().context = context;
-    S().batch = llama_batch_init(BATCH_SIZE, 0, 1);
-    S().chat_templates = common_chat_templates_init(S().model, "");
-    S().sampler = new_sampler(S().model, DEFAULT_SAMPLER_TEMP);
-    LOGi("prepare: slot %d ready", g_active_slot);
-    return 0;
+    return result;
 }
 
 extern "C"
@@ -893,13 +997,102 @@ Java_com_hermie_llamacpp_internal_InferenceEngineImpl_unload(JNIEnv * /*unused*/
     reset_long_term_states();
     reset_short_term_states();
 
+    // Remove LoRA adapter before freeing context
+    if (s.lora && s.context) {
+        llama_set_adapters_lora(s.context, nullptr, 0, nullptr);
+        s.lora = nullptr;
+    }
     if (s.mtmd_ctx) { mtmd_free(s.mtmd_ctx); s.mtmd_ctx = nullptr; }
     if (s.sampler) { common_sampler_free(s.sampler); s.sampler = nullptr; }
     s.chat_templates.reset();
     if (s.batch.token) { llama_batch_free(s.batch); s.batch = {}; }
     if (s.context) { llama_free(s.context); s.context = nullptr; }
-    if (s.model) { llama_model_free(s.model); s.model = nullptr; }
+    if (s.model && s.owns_model) {
+        llama_model_free(s.model);
+    }
+    s.model = nullptr;
+    s.owns_model = true;
     LOGi("unload: slot %d freed", g_active_slot);
+}
+
+// ── LoRA Adapter Functions ──────────────────────────────────────
+
+/**
+ * Load a LoRA adapter from a GGUF file against the active slot's model.
+ * Returns an opaque handle (cast to jlong), or 0 on failure.
+ */
+extern "C"
+JNIEXPORT jlong JNICALL
+Java_com_hermie_llamacpp_internal_InferenceEngineImpl_nativeLoraAdapterInit(
+        JNIEnv *env, jobject /*thiz*/, jstring adapterPath)
+{
+    const char *path = env->GetStringUTFChars(adapterPath, nullptr);
+    auto *adapter = llama_adapter_lora_init(S().model, path);
+    env->ReleaseStringUTFChars(adapterPath, path);
+
+    if (!adapter) {
+        LOGe("nativeLoraAdapterInit: failed to load from %s", path);
+        return 0;
+    }
+
+    LOGi("nativeLoraAdapterInit: loaded adapter from %s", path);
+    return reinterpret_cast<jlong>(adapter);
+}
+
+/**
+ * Apply a loaded LoRA adapter to the active slot's context.
+ * Replaces any previously set adapters on this context.
+ *
+ * @param adapterHandle  Opaque handle from nativeLoraAdapterInit
+ * @param scale          LoRA scale factor (typically 0.0–1.0)
+ * @return 0 on success, non-zero on failure
+ */
+extern "C"
+JNIEXPORT jint JNICALL
+Java_com_hermie_llamacpp_internal_InferenceEngineImpl_nativeLoraAdapterSet(
+        JNIEnv *env, jobject /*thiz*/, jlong adapterHandle, jfloat scale)
+{
+    auto *adapter = reinterpret_cast<llama_adapter_lora *>(adapterHandle);
+    if (!adapter || !S().context) return -1;
+
+    llama_adapter_lora *adapters[] = { adapter };
+    float scales[] = { scale };
+    int result = llama_set_adapters_lora(S().context, adapters, 1, scales);
+    if (result == 0) {
+        S().lora = adapter;
+    }
+    return result;
+}
+
+/**
+ * Remove the LoRA adapter from the active slot's context.
+ */
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_hermie_llamacpp_internal_InferenceEngineImpl_nativeLoraAdapterRemove(
+        JNIEnv *env, jobject /*thiz*/, jlong adapterHandle)
+{
+    auto *adapter = reinterpret_cast<llama_adapter_lora *>(adapterHandle);
+    if (!adapter || !S().context) return;
+
+    llama_set_adapters_lora(S().context, nullptr, 0, nullptr);
+    if (S().lora == adapter) {
+        S().lora = nullptr;
+    }
+}
+
+/**
+ * Free a LoRA adapter handle. Call after removing from all contexts.
+ */
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_hermie_llamacpp_internal_InferenceEngineImpl_nativeDestroyLoraAdapter(
+        JNIEnv *env, jobject /*thiz*/, jlong adapterHandle)
+{
+    auto *adapter = reinterpret_cast<llama_adapter_lora *>(adapterHandle);
+    if (adapter) {
+        llama_adapter_lora_free(adapter);
+    }
 }
 
 extern "C"
@@ -908,12 +1101,20 @@ Java_com_hermie_llamacpp_internal_InferenceEngineImpl_shutdown(JNIEnv *, jobject
     // Unload all slots before shutting down backend
     for (int i = 0; i < NUM_SLOTS; i++) {
         auto &s = g_slots[i];
+        // Remove LoRA adapter before freeing context
+        if (s.lora && s.context) {
+            llama_set_adapters_lora(s.context, nullptr, 0, nullptr);
+            s.lora = nullptr;
+        }
         if (s.mtmd_ctx) { mtmd_free(s.mtmd_ctx); s.mtmd_ctx = nullptr; }
         if (s.sampler) { common_sampler_free(s.sampler); s.sampler = nullptr; }
         s.chat_templates.reset();
         if (s.batch.token) { llama_batch_free(s.batch); s.batch = {}; }
         if (s.context) { llama_free(s.context); s.context = nullptr; }
-        if (s.model) { llama_model_free(s.model); s.model = nullptr; }
+        if (s.model && s.owns_model) {
+            llama_model_free(s.model);
+        }
+        s.model = nullptr;
     }
     llama_backend_free();
 }
