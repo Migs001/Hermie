@@ -54,7 +54,7 @@ Fully on-device Android AI assistant. Dual-LLM architecture backed by a persiste
 
 **Nodes** are atomic facts (`"allergic to shellfish"`, `"works as PM, manager is Mike"`). Each has a 384-dim embedding, category tag, source type (`personal`, `study`, `study_anchor`), and timestamps.
 
-**Edges** connect related nodes. Each edge carries a 384-dim embedding vector that starts at zero and learns over time which queries benefit from traversing it (REMINDRAG).
+**Edges** connect related nodes. Each edge carries a 384-dim embedding vector that starts at zero and learns over time which queries benefit from traversing it ([REMINDRAG][remindrag]).
 
 **Retrieval pipeline:**
 1. Linguistic gate (regex triggers like "remember", "you told me")
@@ -62,7 +62,7 @@ Fully on-device Android AI assistant. Dual-LLM architecture backed by a persiste
 3. DFS expansion from seed nodes, scored as `α·node_similarity + (1-α)·edge_alignment`, depth 4, capped at 9 nodes
 4. Injected as `[MEMORY CONTEXT]` into the Brain's input
 
-**Edge reinforcement (post-response):** embed the Brain's response, check similarity against each retrieved node. High similarity (≥ 0.4) enhances the traversed edge toward the query direction. Low similarity (< 0.3) penalizes by stripping the query-aligned component. Uses the REMINDRAG weight function `δ(‖v‖) = (2/π)·cos(π/2·‖v‖)` for fast wakeup on fresh edges and damped updates on mature ones.
+**Edge reinforcement (post-response):** embed the Brain's response, check similarity against each retrieved node. High similarity (≥ 0.4) enhances the traversed edge toward the query direction. Low similarity (< 0.3) penalizes by stripping the query-aligned component. Uses the [REMINDRAG][remindrag] weight function `δ(‖v‖) = (2/π)·cos(π/2·‖v‖)` for fast wakeup on fresh edges and damped updates on mature ones.
 
 **Drip atomization:** Mind processes raw user messages in background idle windows, extracts durable facts or discards. Deduped via Jaccard similarity > 0.75.
 
@@ -192,3 +192,9 @@ Mind's per-message work (~400ms) runs parallel with Brain generation (~2-4s), ad
 - **Database**: SQLite (graph: nodes, edges, buffer)
 - **Training**: Unsloth + QLoRA, teacher-student distillation
 - **Target**: Android 12+, 12GB RAM (may fit on 8GB)
+
+## References
+
+- **REMINDRAG** edge-reinforcement scheme — arXiv:2510.13193 [cs.IR], NeurIPS 2025. https://doi.org/10.48550/arXiv.2510.13193
+
+[remindrag]: https://doi.org/10.48550/arXiv.2510.13193 "REMINDRAG — arXiv:2510.13193 [cs.IR], NeurIPS 2025"
