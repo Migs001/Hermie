@@ -2,6 +2,14 @@
 
 Fully on-device Android AI assistant. Dual-LLM architecture backed by a persistent graph memory database, running entirely on consumer phone hardware (targeting 12GB RAM).
 
+## Screenshots
+
+| | |
+|---|---|
+| ![Home](screenshots/main.png) Home screen | ![Chat with memory debug trace](screenshots/chat_input.png) Chat, memory retrieval debug trace (retrieval gate, retrieved nodes, buffer hits, drip queue) |
+| ![Graph memory nodes](screenshots/memory_graph_nodes.png) Graph memory browser: 247 nodes, category-tagged facts | ![Sleep consolidation](screenshots/sleep_state.png) Sleep-mode consolidation log (buffer snapshot, phase-by-phase processing) |
+| ![Tasks](screenshots/tasks_WIP.png) Tasks (WIP) | ![Voice input](screenshots/voice_input.png) Voice mode |
+
 ## Architecture
 
 ```
